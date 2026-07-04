@@ -37,11 +37,13 @@ export interface Post {
   suggestedHashtags: string[];
   imageUrl?: string;
   imageCaption?: string;
+  videoUrl?: string;
   detectedAt: string;
   status: PostStatus;
   scheduledTime?: string;
   publishedTime?: string;
   safetyStatus?: SafetyStatus;
+  targetXHandle?: string;
 }
 
 export interface AppState {
@@ -53,5 +55,6 @@ export interface AppState {
     accessToken: string;
     accessSecret: string;
     isConnected: boolean;
+    xHandle?: string;
   };
 }

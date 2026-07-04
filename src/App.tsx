@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp } from 'lucide-react';
 import Sidebar from './components/Sidebar.tsx';
 import ApprovalDashboard from './components/ApprovalDashboard.tsx';
 import ManualPublisher from './components/ManualPublisher.tsx';
@@ -12,6 +12,7 @@ import { Source, Post } from './types.ts';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
@@ -26,6 +27,31 @@ export default function App() {
   const showNotification = (type: 'success' | 'info' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Trend alerts state
+  const [activeTrend, setActiveTrend] = useState<{
+    topic: string;
+    category: string;
+    similarityScore: number;
+    sources: string[];
+    articles: { title: string; source: string; link: string }[];
+    detectedAt: string;
+  } | null>(null);
+
+  const triggerBrowserNotification = (trend: any) => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'granted') {
+        try {
+          new Notification('🚨 Trend Alert: Breaking Topic!', {
+            body: `Surge in coverage detected for "${trend.topic}" across ${trend.sources.join(' & ')}`,
+            icon: '/favicon.ico'
+          });
+        } catch (e) {
+          console.error('Failed to trigger native Notification:', e);
+        }
+      }
+    }
   };
 
   // Data Loading
@@ -47,6 +73,12 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+    // Request browser notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(err => {
+        console.warn('Notification permission request error:', err);
+      });
+    }
   }, []);
 
   // Source Handlers
@@ -186,6 +218,12 @@ export default function App() {
       const postsData = await postsRes.json();
       setPosts(postsData);
 
+      // Trigger Trend Alert if a surge is detected
+      if (data.trendAlert) {
+        setActiveTrend(data.trendAlert);
+        triggerBrowserNotification(data.trendAlert);
+      }
+
       if (data.newPendingPostsCreated > 0) {
         showNotification(
           'success',
@@ -264,15 +302,27 @@ export default function App() {
         scheduledCount={scheduledCount}
         isMonitoring={isMonitoring}
         onMonitor={handleMonitorFeeds}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         {/* TOP STATUS BAR */}
-        <header className="h-14 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs text-slate-400 font-mono">AI News Crawler Operational</span>
+        <header className="h-14 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Mobile Hamburger toggle */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs text-slate-400 font-mono hidden sm:inline">AI News Crawler Operational</span>
+              <span className="text-xs text-slate-400 font-mono sm:hidden">Operational</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -280,12 +330,13 @@ export default function App() {
             {isProcessing && (
               <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
-                <span>AI Processing...</span>
+                <span className="hidden sm:inline">AI Processing...</span>
               </span>
             )}
-            <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+            <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 bg-slate-950 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded border border-slate-800">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Model: gemini-3.5-flash</span>
+              <span className="hidden sm:inline">Model: gemini-3.5-flash</span>
+              <span className="sm:hidden">Gemini</span>
             </div>
           </div>
         </header>
@@ -316,6 +367,98 @@ export default function App() {
         <div className="flex-1 overflow-hidden flex flex-col">
           {renderActiveView()}
         </div>
+
+        {/* Trend Alert Modal Overlay */}
+        {activeTrend && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <div className="relative w-full max-w-lg bg-slate-900 border border-indigo-500/30 rounded-2xl shadow-2xl shadow-indigo-500/10 overflow-hidden animate-in fade-in zoom-in duration-250">
+              
+              {/* Header Gradient Accent */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-sky-500" />
+              
+              {/* Close Button */}
+              <button
+                onClick={() => setActiveTrend(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-lg bg-slate-950/50 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="p-6">
+                {/* Header Badge */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  <span className="text-xs text-red-400 font-bold uppercase tracking-widest font-mono">🚨 Trend Alert Detected</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-xs text-indigo-400 font-mono bg-indigo-950/50 border border-indigo-800/50 px-2 py-0.5 rounded-full">
+                    Overlap: {activeTrend.similarityScore}%
+                  </span>
+                </div>
+
+                {/* Topic Name */}
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight mb-3">
+                  {activeTrend.topic}
+                </h3>
+
+                {/* Explanation */}
+                <p className="text-xs text-slate-400 leading-relaxed mb-6">
+                  A sudden surge in coverage has been detected across multiple independent channels. Our news crawler identified similar breaking details from <strong className="text-sky-400">{activeTrend.sources.join(' and ')}</strong>.
+                </p>
+
+                {/* Articles list */}
+                <div className="space-y-3 mb-6">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono block">Matched Coverage</span>
+                  {activeTrend.articles.map((art: any, index: number) => (
+                    <a
+                      key={index}
+                      href={art.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 rounded-xl bg-slate-950/60 border border-slate-800/85 hover:border-indigo-500/30 transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <span className="text-[10px] text-indigo-400 font-bold font-mono uppercase bg-indigo-500/10 px-1.5 py-0.5 rounded-md w-fit">
+                            {art.source}
+                          </span>
+                          <span className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
+                            {art.title}
+                          </span>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-400 shrink-0 mt-0.5" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setActiveTrend(null);
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                    <span>Review AI Drafts in Queue</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTrend(null)}
+                    className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

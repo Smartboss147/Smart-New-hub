@@ -22,6 +22,7 @@ interface XConfigState {
   accessToken: string;
   accessSecret: string;
   isConnected: boolean;
+  xHandle?: string;
 }
 
 export default function XSettings() {
@@ -30,7 +31,8 @@ export default function XSettings() {
     apiSecret: '',
     accessToken: '',
     accessSecret: '',
-    isConnected: false
+    isConnected: false,
+    xHandle: ''
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -134,6 +136,27 @@ export default function XSettings() {
           )}
 
           <div className="space-y-4">
+            {/* Target X Handle */}
+            <div className="flex flex-col gap-1.5 bg-sky-500/5 p-3.5 rounded-xl border border-sky-500/10">
+              <label className="text-xs text-sky-400 font-semibold flex items-center gap-1.5">
+                <Twitter className="w-3.5 h-3.5 text-sky-400" />
+                <span>Target X Account Handle</span>
+              </label>
+              <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                The public Twitter/X username where approved articles and automated news will be posted.
+              </p>
+              <div className="relative flex items-center mt-1">
+                <span className="absolute left-3.5 text-slate-400 font-mono text-xs select-none">@</span>
+                <input
+                  type="text"
+                  value={(config.xHandle || '').replace(/^@/, '')}
+                  onChange={(e) => setConfig({ ...config, xHandle: `@${e.target.value.trim().replace(/^@/, '')}` })}
+                  placeholder="AIPressRoom"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-8 pr-3 text-xs text-slate-200 outline-none focus:border-sky-500 font-mono"
+                />
+              </div>
+            </div>
+
             {/* API Key */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-slate-400 font-semibold flex items-center gap-1">

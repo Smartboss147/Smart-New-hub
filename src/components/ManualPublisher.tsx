@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Save,
@@ -12,7 +12,13 @@ import {
   Link as LinkIcon,
   HelpCircle,
   ArrowRight,
-  Zap
+  Zap,
+  Film,
+  UploadCloud,
+  X,
+  Paperclip,
+  Video,
+  Twitter
 } from 'lucide-react';
 import { CATEGORIES } from '../utils.js';
 
@@ -25,6 +31,10 @@ interface ManualPublisherProps {
     selectedPostText: string;
     status: 'draft' | 'scheduled' | 'published';
     scheduledTime?: string;
+    imageUrl?: string;
+    imageCaption?: string;
+    videoUrl?: string;
+    targetXHandle?: string;
   }) => Promise<void>;
   isProcessing: boolean;
 }
@@ -34,8 +44,15 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
   const [title, setTitle] = useState<string>('');
   const [category, setCategory] = useState<string>('Technology');
   const [link, setLink] = useState<string>('');
-  const [imageSimulated, setImageSimulated] = useState<string>('');
+  const [targetXHandle, setTargetXHandle] = useState<string>('');
+  
+  // Real media states
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [videoUrl, setVideoUrl] = useState<string>('');
   const [imageCaption, setImageCaption] = useState<string>('');
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
+  const [mediaUrlInput, setMediaUrlInput] = useState<string>('');
 
   const [isExpanding, setIsExpanding] = useState<boolean>(false);
   const [expansionPrompt, setExpansionPrompt] = useState<string>('');
@@ -46,6 +63,18 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
   const [scheduledTime, setScheduledTime] = useState<string>('');
   const [showScheduler, setShowScheduler] = useState<boolean>(false);
 
+  useEffect(() => {
+    // Load default X handle config
+    fetch('/api/x-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.xHandle) {
+          setTargetXHandle(data.xHandle);
+        }
+      })
+      .catch(err => console.error('Error fetching X handle config for publisher:', err));
+  }, []);
+
   const charCount = text.length;
   const isOverCharLimit = charCount > 280;
 
@@ -54,9 +83,76 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
     setTitle('');
     setCategory('Technology');
     setLink('');
-    setImageSimulated('');
+    setImageUrl('');
+    setVideoUrl('');
     setImageCaption('');
     setShowScheduler(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      await handleFileProcess(file);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      await handleFileProcess(file);
+    }
+  };
+
+  const handleFileProcess = (file: File) => {
+    return new Promise<void>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const result = reader.result as string;
+        const isVideo = file.type.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm');
+        if (isVideo) {
+          setVideoUrl(result);
+          setImageUrl('');
+        } else {
+          setImageUrl(result);
+          setVideoUrl('');
+        }
+        resolve();
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAddMediaUrl = () => {
+    if (!mediaUrlInput.trim()) return;
+    const url = mediaUrlInput.trim();
+    const isVideo = url.match(/\.(mp4|webm|mov|ogg)/i) || url.includes('video') || url.includes('assets.mixkit.co');
+    if (isVideo) {
+      setVideoUrl(url);
+      setImageUrl('');
+    } else {
+      setImageUrl(url);
+      setVideoUrl('');
+    }
+    setMediaUrlInput('');
+    setShowUrlInput(false);
+  };
+
+  const handleRemoveMedia = () => {
+    setImageUrl('');
+    setVideoUrl('');
+    setImageCaption('');
   };
 
   const handleAiExpand = async () => {
@@ -122,7 +218,11 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
       category,
       selectedPostText: text,
       status,
-      scheduledTime: scheduledTimeStr
+      scheduledTime: scheduledTimeStr,
+      imageUrl: imageUrl || undefined,
+      imageCaption: imageCaption || undefined,
+      videoUrl: videoUrl || undefined,
+      targetXHandle: targetXHandle || undefined
     });
 
     handleClear();
@@ -286,6 +386,27 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
               Metadata & Assets
             </h3>
 
+            {/* Target X Handle */}
+            <div className="flex flex-col gap-1.5 bg-sky-500/5 p-3 rounded-xl border border-sky-500/10">
+              <label className="text-xs text-sky-400 font-semibold flex items-center gap-1.5">
+                <Twitter className="w-3.5 h-3.5 text-sky-400" />
+                <span>Target X Handle</span>
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-slate-400 font-mono text-xs select-none">@</span>
+                <input
+                  type="text"
+                  value={targetXHandle.replace(/^@/, '')}
+                  onChange={(e) => setTargetXHandle(`@${e.target.value.trim().replace(/^@/, '')}`)}
+                  placeholder="AIPressRoom"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 pl-7 text-xs text-slate-200 outline-none focus:border-sky-500 font-mono"
+                />
+              </div>
+              <p className="text-[9.5px] text-slate-500 leading-normal">
+                Will publish to this handle instead of default when clicked.
+              </p>
+            </div>
+
             {/* Category */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-slate-400 font-semibold">Post Category</label>
@@ -332,46 +453,130 @@ export default function ManualPublisher({ onAddPost, isProcessing }: ManualPubli
               />
             </div>
 
-            {/* Media Upload simulator */}
+            {/* Media Upload Block */}
             <div className="flex flex-col gap-2 border-t border-slate-800/60 pt-3">
-              <label className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Simulate Media Attachment</span>
-              </label>
-              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-center space-y-2">
-                {imageSimulated ? (
-                  <div className="relative">
-                    <img src={imageSimulated} alt="Simulated attachment" className="rounded-lg h-24 object-cover w-full" referrerPolicy="no-referrer" />
-                    <button
-                      onClick={() => setImageSimulated('')}
-                      className="absolute top-1 right-1 bg-black/60 text-slate-300 hover:text-white p-1 rounded-full text-xs"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Post Media Attachments</span>
+                </label>
+                {!imageUrl && !videoUrl && (
                   <button
-                    onClick={() => {
-                      // Simulating random tech image selection
-                      const randomId = Math.floor(Math.random() * 100);
-                      setImageSimulated(`https://picsum.photos/id/${randomId}/400/300`);
-                    }}
-                    className="w-full border border-dashed border-slate-800 hover:border-sky-500/50 py-4 rounded-lg flex flex-col items-center justify-center gap-1 transition-all"
+                    type="button"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className="text-[10px] text-sky-400 hover:text-sky-300 font-mono flex items-center gap-0.5"
                   >
-                    <ImageIcon className="w-5 h-5 text-slate-600" />
-                    <span className="text-[10px] text-slate-500 font-medium">Attach Mock Graphic</span>
+                    <LinkIcon className="w-2.5 h-2.5" />
+                    <span>{showUrlInput ? 'Hide URL' : 'Add Web URL'}</span>
                   </button>
                 )}
-                {imageSimulated && (
+              </div>
+
+              {/* Web URL input drawer */}
+              {showUrlInput && !imageUrl && !videoUrl && (
+                <div className="flex gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800 animate-in slide-in-from-top-2 duration-150">
                   <input
                     type="text"
-                    value={imageCaption}
-                    onChange={(e) => setImageCaption(e.target.value)}
-                    placeholder="Describe image caption / Alt text"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-[10px] text-slate-300 outline-none"
+                    placeholder="Paste image or video URL..."
+                    value={mediaUrlInput}
+                    onChange={(e) => setMediaUrlInput(e.target.value)}
+                    className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-indigo-500"
                   />
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleAddMediaUrl}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg cursor-pointer"
+                  >
+                    Attach
+                  </button>
+                </div>
+              )}
+
+              {/* Active Media Previewers */}
+              {imageUrl ? (
+                <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-2.5 space-y-2">
+                  <div className="relative group overflow-hidden rounded-lg bg-slate-900 aspect-video max-h-40 flex items-center justify-center">
+                    <img
+                      src={imageUrl}
+                      alt="Post media preview"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {/* Remove Button overlay */}
+                    <button
+                      type="button; cursor-pointer"
+                      onClick={handleRemoveMedia}
+                      className="absolute top-2 right-2 p-1 rounded-full bg-slate-950/80 border border-slate-800 text-rose-400 hover:text-rose-300 hover:bg-slate-950 transition-all shadow-lg cursor-pointer"
+                      title="Remove Picture"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Image Caption Edit Field */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-slate-500 uppercase tracking-widest font-mono font-bold">Image Alt text / Caption</label>
+                    <input
+                      type="text"
+                      placeholder="Describe this picture..."
+                      value={imageCaption}
+                      onChange={(e) => setImageCaption(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+              ) : videoUrl ? (
+                <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-2.5 space-y-2">
+                  <div className="relative group overflow-hidden rounded-lg bg-slate-900 aspect-video max-h-40 flex items-center justify-center">
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="w-full h-full object-contain"
+                    />
+                    {/* Remove Button overlay */}
+                    <button
+                      type="button"
+                      onClick={handleRemoveMedia}
+                      className="absolute top-2 right-2 p-1 rounded-full bg-slate-950/80 border border-slate-800 text-rose-400 hover:text-rose-300 hover:bg-slate-950 transition-all shadow-lg z-10 cursor-pointer"
+                      title="Remove Video"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 text-[9px] text-purple-400 font-mono bg-purple-950/20 border border-purple-800/20 px-2 py-0.5 rounded-lg">
+                    <Film className="w-3 h-3 shrink-0" />
+                    <span>Video Attached</span>
+                  </div>
+                </div>
+              ) : (
+                /* Drag and Drop File Upload Dropzone */
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('manual-media-file-input')?.click()}
+                  className={`border border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
+                    isDragging
+                      ? 'border-indigo-500 bg-indigo-950/10 text-whiteScale shadow-inner scale-[0.99]'
+                      : 'border-slate-800 hover:border-slate-700 bg-slate-950/40 text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  <input
+                    id="manual-media-file-input"
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <UploadCloud className={`w-6 h-6 mb-1 ${isDragging ? 'text-indigo-400 animate-bounce' : 'text-slate-500'}`} />
+                  <p className="text-[11px] font-semibold leading-normal">
+                    {isDragging ? 'Drop media now!' : 'Drag & drop image/video'}
+                  </p>
+                  <p className="text-[9px] text-slate-500 font-mono">
+                    or click to select file
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

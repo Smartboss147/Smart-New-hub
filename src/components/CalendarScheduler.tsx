@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Clock3,
   CheckCircle,
-  X
+  X,
+  Twitter
 } from 'lucide-react';
 import { Post } from '../types.js';
 
@@ -248,15 +249,21 @@ export default function CalendarScheduler({
               {selectedDayPosts.map((post) => (
                 <div key={post.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 relative">
                   {/* Category and Time */}
-                  <div className="flex justify-between items-center">
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                      post.category === 'Technology' ? 'bg-purple-500/10 text-purple-400' :
-                      post.category === 'Cryptocurrency' ? 'bg-amber-500/10 text-amber-400' :
-                      post.category === 'Business' ? 'bg-emerald-500/10 text-emerald-400' :
-                      post.category === 'Breaking News' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {post.category}
-                    </span>
+                  <div className="flex justify-between items-center flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                        post.category === 'Technology' ? 'bg-purple-500/10 text-purple-400' :
+                        post.category === 'Cryptocurrency' ? 'bg-amber-500/10 text-amber-400' :
+                        post.category === 'Business' ? 'bg-emerald-500/10 text-emerald-400' :
+                        post.category === 'Breaking News' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {post.category}
+                      </span>
+                      <span className="flex items-center gap-1 text-[9px] text-sky-400 bg-sky-500/10 border border-sky-500/15 px-1 py-0.2 rounded font-mono font-medium">
+                        <Twitter className="w-2.5 h-2.5" />
+                        <span>{post.targetXHandle || '@AIPressRoom'}</span>
+                      </span>
+                    </div>
                     <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1 font-bold">
                       <Clock className="w-3 h-3 text-sky-400" />
                       {post.scheduledTime ? new Date(post.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}

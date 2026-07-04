@@ -19,6 +19,7 @@ interface DBState {
     accessToken: string;
     accessSecret: string;
     isConnected: boolean;
+    xHandle?: string;
   };
 }
 
@@ -99,6 +100,8 @@ const DEFAULT_POSTS: Post[] = [
     similarityScore: 18,
     aiConfidenceScore: 94,
     suggestedHashtags: ['OpenAI', 'AIReasoning', 'o1Model', 'TechNews'],
+    imageUrl: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=800&q=80',
+    imageCaption: 'Neural Network visualization representing the o1 advanced reasoning architecture.',
     detectedAt: new Date(Date.now() - 1 * 3600 * 1000).toISOString(), // 1 hour ago
     status: 'pending',
     safetyStatus: {
@@ -136,6 +139,8 @@ const DEFAULT_POSTS: Post[] = [
     similarityScore: 12,
     aiConfidenceScore: 89,
     suggestedHashtags: ['Bitcoin', 'CryptoNews', 'Finance', 'ETFs'],
+    imageUrl: 'https://images.unsplash.com/photo-1516245834210-c4c142787335?auto=format&fit=crop&w=800&q=80',
+    imageCaption: 'Golden Bitcoin physical representation sitting over currency ticker data.',
     detectedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(), // 3 hours ago
     status: 'pending',
     safetyStatus: {
@@ -159,6 +164,7 @@ const DEFAULT_POSTS: Post[] = [
     similarityScore: 0,
     aiConfidenceScore: 99,
     suggestedHashtags: ['Productivity', 'Leadership', 'BusinessStrategy'],
+    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-keyboard-typing-in-a-dark-office-43093-large.mp4',
     detectedAt: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
     status: 'draft',
     safetyStatus: {
@@ -276,7 +282,8 @@ const INITIAL_STATE: DBState = {
     apiSecret: '',
     accessToken: '',
     accessSecret: '',
-    isConnected: false
+    isConnected: false,
+    xHandle: '@AIPressRoom'
   }
 };
 
@@ -292,6 +299,12 @@ export function getDB(): DBState {
     if (!parsed.sources || !parsed.posts) {
       saveDB(INITIAL_STATE);
       return INITIAL_STATE;
+    }
+    // Backward compatibility for xHandle
+    if (!parsed.xConfig) {
+      parsed.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
+    } else if (!parsed.xConfig.xHandle) {
+      parsed.xConfig.xHandle = '@AIPressRoom';
     }
     return parsed;
   } catch (err) {

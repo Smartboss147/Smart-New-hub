@@ -7,7 +7,8 @@ import {
   History,
   Settings,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -17,6 +18,8 @@ interface SidebarProps {
   scheduledCount: number;
   isMonitoring: boolean;
   onMonitor: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 export default function Sidebar({
@@ -25,7 +28,9 @@ export default function Sidebar({
   pendingCount,
   scheduledCount,
   isMonitoring,
-  onMonitor
+  onMonitor,
+  isOpen,
+  onClose
 }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', name: 'Approval Queue', icon: LayoutDashboard, badge: pendingCount > 0 ? pendingCount : null },
@@ -37,15 +42,15 @@ export default function Sidebar({
     { id: 'settings', name: 'X Integration', icon: Settings }
   ];
 
-  return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col justify-between h-full">
+  const renderContent = (isMobile: boolean) => (
+    <div className="flex flex-col h-full justify-between">
       <div className="flex flex-col flex-1 p-4 overflow-y-auto">
         {/* Header */}
         <div className="flex items-center gap-3 px-2 py-3 border-b border-slate-800 mb-6">
-          <div className="bg-sky-500 text-white p-2 rounded-lg shadow-lg shadow-sky-500/10">
+          <div className="bg-sky-500 text-white p-2 rounded-lg shadow-lg shadow-sky-500/10 shrink-0">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="truncate">
             <h1 className="font-bold text-white text-lg leading-tight tracking-tight">X Content</h1>
             <span className="text-xs text-slate-500 font-mono">AI Studio v1.0</span>
           </div>
@@ -59,7 +64,10 @@ export default function Sidebar({
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  if (isMobile) onClose();
+                }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                   isActive
                     ? 'bg-sky-600/15 text-sky-400 border-l-2 border-sky-500 pl-2.5'
@@ -94,6 +102,40 @@ export default function Sidebar({
           <span>{isMonitoring ? 'Checking Feeds...' : 'Sync & Check Feeds'}</span>
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex-col h-full shrink-0">
+        {renderContent(false)}
+      </aside>
+
+      {/* Mobile Sidebar (Drawer Overlay) */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity duration-300"
+            onClick={onClose}
+          />
+
+          {/* Drawer Panel */}
+          <aside className="relative flex w-72 max-w-xs flex-col bg-slate-900 text-slate-300 h-full border-r border-slate-800 shadow-2xl">
+            {/* Close button */}
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {renderContent(true)}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

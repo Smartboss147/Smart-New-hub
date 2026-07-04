@@ -10,7 +10,8 @@ import {
   BarChart,
   Eye,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Twitter
 } from 'lucide-react';
 import { Post } from '../types.js';
 import { CATEGORIES } from '../utils.js';
@@ -124,7 +125,7 @@ export default function PostHistory({ posts, onDeletePost }: PostHistoryProps) {
                 <div key={post.id} className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl hover:bg-slate-950/70 transition-all flex flex-col md:flex-row justify-between items-start gap-4">
                   {/* Left Body Content */}
                   <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
                         post.category === 'Technology' ? 'bg-purple-500/10 text-purple-400' :
                         post.category === 'Cryptocurrency' ? 'bg-amber-500/10 text-amber-400' :
@@ -132,6 +133,10 @@ export default function PostHistory({ posts, onDeletePost }: PostHistoryProps) {
                         post.category === 'Breaking News' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-400'
                       }`}>
                         {post.category}
+                      </span>
+                      <span className="flex items-center gap-1 text-[10px] text-sky-400 bg-sky-500/10 border border-sky-500/15 px-1.5 py-0.2 rounded font-mono font-medium">
+                        <Twitter className="w-2.5 h-2.5" />
+                        <span>{post.targetXHandle || '@AIPressRoom'}</span>
                       </span>
                       <span className="text-[10px] text-slate-500 font-mono">
                         Published {post.publishedTime ? new Date(post.publishedTime).toLocaleString() : new Date(post.detectedAt).toLocaleString()}

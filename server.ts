@@ -94,7 +94,11 @@ app.post('/api/posts', (req, res) => {
       category,
       selectedPostText,
       status,
-      scheduledTime
+      scheduledTime,
+      imageUrl,
+      imageCaption,
+      videoUrl,
+      targetXHandle
     } = req.body;
 
     if (!selectedPostText || !category) {
@@ -124,7 +128,11 @@ app.post('/api/posts', (req, res) => {
       status: status || 'draft',
       scheduledTime,
       safetyStatus: safety,
-      publishedTime: status === 'published' ? new Date().toISOString() : undefined
+      publishedTime: status === 'published' ? new Date().toISOString() : undefined,
+      imageUrl,
+      imageCaption,
+      videoUrl,
+      targetXHandle: targetXHandle || getXConfig()?.xHandle || '@AIPressRoom'
     });
 
     res.status(201).json(post);
@@ -187,9 +195,9 @@ app.get('/api/x-config', (req, res) => {
 
 app.post('/api/x-config', (req, res) => {
   try {
-    const { apiKey, apiSecret, accessToken, accessSecret } = req.body;
+    const { apiKey, apiSecret, accessToken, accessSecret, xHandle } = req.body;
     const isConnected = !!(apiKey && apiSecret && accessToken && accessSecret);
-    saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected });
+    saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected, xHandle });
     res.json({ message: 'X configuration updated', isConnected });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -330,6 +338,14 @@ app.post('/api/sources/monitor', async (req, res) => {
         link: 'https://www.wired.com/decentralized-ai-standards'
       },
       {
+        sourceId: 'src-techcrunch-ai',
+        sourceName: 'TechCrunch AI',
+        category: 'Technology',
+        title: 'Global Tech Consortium Announces Open Standards for Decentralized AI Models',
+        content: 'Major technology platforms and custom hardware designers have announced an open alliance to establish shared benchmarks, secure hosting zones, and standardized decentralized governance for high-performance AI models.',
+        link: 'https://techcrunch.com/decentralized-ai-standards-alliance'
+      },
+      {
         sourceId: 'src-coindesk',
         sourceName: 'CoinDesk Crypto',
         category: 'Cryptocurrency',
@@ -378,14 +394,27 @@ app.post('/api/sources/monitor', async (req, res) => {
       }
     }
 
-    // If no new real feed items were detected, or we are offline/throttled, inject one fallback article to demonstrate the dynamic AI rewriting live!
+    // If no new real feed items were detected, or we are offline/throttled, inject fallback articles to demonstrate the dynamic AI rewriting live!
     if (itemsToProcess.length === 0) {
-      // Find a fallback article that we haven't processed yet
-      const unprocessedFallback = fallbackArticles.find(
+      // Find fallback articles that we haven't processed yet
+      const unprocessedFallbacks = fallbackArticles.filter(
         art => !existingTitles.has(art.title.toLowerCase().trim()) && !existingUrls.has(art.link.toLowerCase().trim())
       );
-      if (unprocessedFallback) {
-        itemsToProcess.push(unprocessedFallback);
+      
+      if (unprocessedFallbacks.length > 0) {
+        // If our two related AI/Tech articles are unprocessed, push both of them to trigger a Trend Alert
+        const hasWired = unprocessedFallbacks.some(f => f.sourceId === 'src-wired');
+        const hasTCAI = unprocessedFallbacks.some(f => f.sourceId === 'src-techcrunch-ai');
+        
+        if (hasWired && hasTCAI) {
+          itemsToProcess.push(
+            unprocessedFallbacks.find(f => f.sourceId === 'src-wired'),
+            unprocessedFallbacks.find(f => f.sourceId === 'src-techcrunch-ai')
+          );
+        } else {
+          // Just take up to 2 unprocessed ones
+          itemsToProcess.push(...unprocessedFallbacks.slice(0, 2));
+        }
       }
     }
 
@@ -469,7 +498,8 @@ app.post('/api/sources/monitor', async (req, res) => {
           aiConfidenceScore: data.aiConfidenceScore,
           suggestedHashtags: data.suggestedHashtags,
           status: 'pending',
-          safetyStatus: safety
+          safetyStatus: safety,
+          targetXHandle: getXConfig()?.xHandle || '@AIPressRoom'
         });
 
         newPostsGenerated++;
@@ -478,12 +508,72 @@ app.post('/api/sources/monitor', async (req, res) => {
       }
     }
 
+    // -------------------------------------------------------------------------
+    // TREND ALERT SIMILARITY DETECTION LOGIC
+    // -------------------------------------------------------------------------
+    const detectedTrends: any[] = [];
+    const processedPairs = new Set<string>();
+
+    // Take recent posts (last 15 items) from database for cross-check
+    const recentDbPosts = currentPosts.slice(0, 15);
+
+    // Evaluator helper
+    const checkAndAddTrend = (
+      titleA: string, contentA: string, srcIdA: string, srcNameA: string, urlA: string, catA: string,
+      titleB: string, contentB: string, srcIdB: string, srcNameB: string, urlB: string, catB: string
+    ) => {
+      if (!titleA || !titleB) return;
+      if (srcIdA === srcIdB) return; // Ignore if from the exact same source
+      
+      const sim = calculateSimilarity(titleA + " " + contentA, titleB + " " + contentB);
+      if (sim >= 12) { // 12% is a reliable threshold for filtered words overlap
+        const pairKey = [srcIdA, srcIdB].sort().join('-');
+        if (!processedPairs.has(pairKey)) {
+          processedPairs.add(pairKey);
+          detectedTrends.push({
+            topic: titleA.length < titleB.length ? titleA : titleB,
+            category: catA || catB || 'Breaking News',
+            similarityScore: sim,
+            sources: [srcNameA, srcNameB],
+            articles: [
+              { title: titleA, source: srcNameA, link: urlA },
+              { title: titleB, source: srcNameB, link: urlB }
+            ],
+            detectedAt: new Date().toISOString()
+          });
+        }
+      }
+    };
+
+    // 1. Check newly processed items against each other
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      for (let j = i + 1; j < itemsToProcess.length; j++) {
+        const itemA = itemsToProcess[i];
+        const itemB = itemsToProcess[j];
+        checkAndAddTrend(
+          itemA.title, itemA.content, itemA.sourceId, itemA.sourceName, itemA.link, itemA.category,
+          itemB.title, itemB.content, itemB.sourceId, itemB.sourceName, itemB.link, itemB.category
+        );
+      }
+    }
+
+    // 2. Check newly processed items against recent database posts
+    for (const item of itemsToProcess) {
+      for (const post of recentDbPosts) {
+        checkAndAddTrend(
+          item.title, item.content, item.sourceId, item.sourceName, item.link, item.category,
+          post.sourceTitle || '', post.sourceContent || '', post.sourceId || 'db-source', post.sourceName || 'Unknown Source', post.sourceUrl || '', post.category
+        );
+      }
+    }
+
     res.json({
       success: true,
       feedsMonitored: sources.length,
       feedsSuccessfullyFetched: fetchedCount,
       newArticlesProcessed: itemsToProcess.length,
-      newPendingPostsCreated: newPostsGenerated
+      newPendingPostsCreated: newPostsGenerated,
+      trendAlert: detectedTrends.length > 0 ? detectedTrends[0] : null
     });
   } catch (error: any) {
     console.error('Monitor feeds error:', error);
