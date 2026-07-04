@@ -1,4 +1,4 @@
-export type SourceType = 'x_account' | 'rss_feed' | 'news_site' | 'blog';
+export type SourceType = 'x_account' | 'rss_feed' | 'news_site' | 'blog' | 'instagram_handle';
 
 export interface Source {
   id: string;

@@ -11,7 +11,8 @@ import {
   ToggleRight,
   Info,
   Check,
-  Hash
+  Hash,
+  Instagram
 } from 'lucide-react';
 import { Source, SourceType } from '../types.js';
 import { CATEGORIES } from '../utils.js';
@@ -51,19 +52,19 @@ export default function SourceManager({
     }
 
     // Basic URL check for RSS/Web
-    if (type !== 'x_account' && !url.startsWith('http://') && !url.startsWith('https://')) {
+    if (type !== 'x_account' && type !== 'instagram_handle' && !url.startsWith('http://') && !url.startsWith('https://')) {
       setError('Source URL must begin with http:// or https://');
       return;
     }
 
-    // Basic handle check for X Account
-    if (type === 'x_account') {
+    // Basic handle check for X Account and Instagram Handle
+    if (type === 'x_account' || type === 'instagram_handle') {
       let handle = url;
       if (handle.startsWith('@')) {
         handle = handle.substring(1);
       }
-      if (handle.includes('/') || handle.includes(' ')) {
-        setError('Please provide a valid, clean X handle (e.g., @techcrunch)');
+      if (handle.includes('/') || handle.includes(' ') || !handle) {
+        setError(`Please provide a valid, clean ${type === 'x_account' ? 'X' : 'Instagram'} handle (e.g., @techcrunch)`);
         return;
       }
     }
@@ -72,7 +73,7 @@ export default function SourceManager({
       await onAddSource({
         name,
         type,
-        url: type === 'x_account' && !url.startsWith('@') ? `@${url}` : url,
+        url: (type === 'x_account' || type === 'instagram_handle') && !url.startsWith('@') ? `@${url}` : url,
         category,
         isActive: true
       });
@@ -147,6 +148,11 @@ export default function SourceManager({
                             <Twitter className="w-3.5 h-3.5 text-sky-400 fill-sky-400/10" />
                             <span>X Account</span>
                           </>
+                        ) : src.type === 'instagram_handle' ? (
+                          <>
+                            <Instagram className="w-3.5 h-3.5 text-pink-400 fill-pink-400/10" />
+                            <span>Instagram</span>
+                          </>
                         ) : (
                           <>
                             <Globe className="w-3.5 h-3.5 text-indigo-400" />
@@ -218,20 +224,21 @@ export default function SourceManager({
             {/* Source Type */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-slate-400 font-semibold">Source Type</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setType('rss_feed');
                     setUrl('https://');
                   }}
-                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2 px-1.5 rounded-xl border text-center font-semibold text-[10px] sm:text-xs transition-all flex flex-col items-center justify-center gap-1 ${
                     type === 'rss_feed'
                       ? 'bg-indigo-600/15 border-indigo-500 text-indigo-400'
                       : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
                   }`}
                 >
-                  RSS Feed URL
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>RSS Feed</span>
                 </button>
                 <button
                   type="button"
@@ -239,13 +246,29 @@ export default function SourceManager({
                     setType('x_account');
                     setUrl('@');
                   }}
-                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2 px-1.5 rounded-xl border text-center font-semibold text-[10px] sm:text-xs transition-all flex flex-col items-center justify-center gap-1 ${
                     type === 'x_account'
                       ? 'bg-indigo-600/15 border-indigo-500 text-indigo-400'
                       : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
                   }`}
                 >
-                  X Account handle
+                  <Twitter className="w-3.5 h-3.5" />
+                  <span>X Account</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setType('instagram_handle');
+                    setUrl('@');
+                  }}
+                  className={`py-2 px-1.5 rounded-xl border text-center font-semibold text-[10px] sm:text-xs transition-all flex flex-col items-center justify-center gap-1 ${
+                    type === 'instagram_handle'
+                      ? 'bg-indigo-600/15 border-indigo-500 text-indigo-400'
+                      : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Instagram className="w-3.5 h-3.5" />
+                  <span>Instagram</span>
                 </button>
               </div>
             </div>
@@ -257,7 +280,7 @@ export default function SourceManager({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Bloomberg Crypto, WIRED Tech"
+                placeholder="e.g., Bloomberg Crypto, @mazi_tundeednut"
                 className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 outline-none focus:border-indigo-500"
               />
             </div>
@@ -265,13 +288,13 @@ export default function SourceManager({
             {/* URL or Handle */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-slate-400 font-semibold">
-                {type === 'x_account' ? 'X Account Handle' : 'Feed RSS URL'}
+                {type === 'x_account' ? 'X Account Handle' : type === 'instagram_handle' ? 'Instagram Handle' : 'Feed RSS URL'}
               </label>
               <input
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder={type === 'x_account' ? 'e.g., @elonmusk, techcrunch' : 'e.g., https://site.com/feed/rss'}
+                placeholder={type === 'x_account' ? 'e.g., @elonmusk' : type === 'instagram_handle' ? 'e.g., @mazi_tundeednut' : 'e.g., https://site.com/feed/rss'}
                 className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 outline-none focus:border-indigo-500 font-mono"
               />
             </div>

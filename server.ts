@@ -319,7 +319,10 @@ app.post('/api/posts/:id/regenerate', async (req, res) => {
 // Fetches latest RSS feeds and uses Gemini to generate rewrites into 'pending' posts
 app.post('/api/sources/monitor', async (req, res) => {
   try {
-    const sources = getSources().filter(s => s.isActive && s.type === 'rss_feed');
+    const activeSources = getSources().filter(s => s.isActive);
+    const rssSources = activeSources.filter(s => s.type === 'rss_feed');
+    const instagramSources = activeSources.filter(s => s.type === 'instagram_handle');
+
     let fetchedCount = 0;
     let newPostsGenerated = 0;
 
@@ -366,7 +369,8 @@ app.post('/api/sources/monitor', async (req, res) => {
     // Try fetching from real feeds first
     const itemsToProcess: any[] = [];
 
-    for (const src of sources) {
+    // 1. Process RSS Feeds
+    for (const src of rssSources) {
       try {
         // Limit real fetches to prevent blocking
         console.log(`Fetching feed: ${src.url}`);
@@ -391,6 +395,63 @@ app.post('/api/sources/monitor', async (req, res) => {
         }
       } catch (err) {
         console.error(`Error fetching feed ${src.name}:`, err);
+      }
+    }
+
+    // 2. Process Instagram Handles via AI Feed Simulation
+    for (const src of instagramSources) {
+      try {
+        console.log(`Simulating Instagram handle feed: ${src.url}`);
+        fetchedCount++;
+
+        // Call Gemini to generate a realistic, fresh post/update based on this Instagram handle
+        const instagramPrompt = `
+          Generate exactly 1 realistic, highly engaging Instagram post update from the handle "${src.url}" (Friendly Channel Name: "${src.name}").
+          The category of this channel is "${src.category}".
+          
+          If the handle is "@mazi_tundeednut" or "@mazitundeednut" or contains "tundeednut" or "tundednut", it MUST represent a typical, hot Nigerian news, entertainment gossip, afrobeats star update, or a viral street/culture trend update. Style the content description typical of a famous Nigerian blog: enthusiastic, highly engaging, mixing classic Nigerian Pidgin expressions and English (e.g., "Wow! Truly massive!", "What do you think guys? Comment below", "Slide to see video!").
+          Otherwise, make it a standard, exciting post appropriate for that handle.
+          
+          Provide:
+          1. A highly descriptive, unique, and click-worthy title/headline (e.g. "Famous Afrobeats Star Davido spotted donating millions in Lagos orphanage").
+          2. The detailed post content (representing the caption with emojis, trending gossip, context).
+          3. A mock Instagram post URL.
+        `;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: instagramPrompt,
+          config: {
+            systemInstruction: `You are an elite Instagram content researcher. Generate 1 realistic social media update in JSON format. Do NOT include markdown code block formatting like \`\`\`json, just return raw JSON text.`,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                content: { type: Type.STRING },
+                link: { type: Type.STRING }
+              },
+              required: ['title', 'content', 'link']
+            }
+          }
+        });
+
+        const data = JSON.parse(response.text.trim());
+        const title = data.title || '';
+        const url = data.link || `https://instagram.com/p/${Math.random().toString(36).substring(2, 11)}`;
+
+        if (title && !existingTitles.has(title.toLowerCase().trim()) && !existingUrls.has(url.toLowerCase().trim())) {
+          itemsToProcess.push({
+            sourceId: src.id,
+            sourceName: src.name,
+            category: src.category,
+            title: title,
+            content: data.content || title,
+            link: url
+          });
+        }
+      } catch (err) {
+        console.error(`Error simulating Instagram feed for ${src.name}:`, err);
       }
     }
 
@@ -569,7 +630,7 @@ app.post('/api/sources/monitor', async (req, res) => {
 
     res.json({
       success: true,
-      feedsMonitored: sources.length,
+      feedsMonitored: activeSources.length,
       feedsSuccessfullyFetched: fetchedCount,
       newArticlesProcessed: itemsToProcess.length,
       newPendingPostsCreated: newPostsGenerated,

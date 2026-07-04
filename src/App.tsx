@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp } from 'lucide-react';
+import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp, Sun, Moon } from 'lucide-react';
 import Sidebar from './components/Sidebar.tsx';
 import ApprovalDashboard from './components/ApprovalDashboard.tsx';
 import ManualPublisher from './components/ManualPublisher.tsx';
@@ -11,6 +11,9 @@ import AnalyticsView from './components/AnalyticsView.tsx';
 import { Source, Post } from './types.ts';
 
 export default function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [sources, setSources] = useState<Source[]>([]);
@@ -80,6 +83,15 @@ export default function App() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    if (theme === 'light') {
+      document.documentElement.classList.add('theme-light');
+    } else {
+      document.documentElement.classList.remove('theme-light');
+    }
+  }, [theme]);
 
   // Source Handlers
   const handleAddSource = async (sourceData: Omit<Source, 'id' | 'addedAt'>) => {
@@ -293,7 +305,7 @@ export default function App() {
   const scheduledCount = posts.filter((p) => p.status === 'scheduled').length;
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden antialiased">
+    <div className={`flex h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden antialiased ${theme === 'light' ? 'theme-light bg-white text-slate-900' : ''}`}>
       {/* Sidebar navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -325,12 +337,32 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* Global Theme Toggle Button */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-sky-400 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer shadow-sm shrink-0"
+              title={theme === 'dark' ? 'Switch to Daytime Light Mode' : 'Switch to Midnight Dark Mode'}
+              id="global-theme-toggle"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-400 fill-amber-400/10 shrink-0" />
+                  <span className="text-[11px] font-semibold font-mono hidden sm:inline text-slate-300">Day Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-indigo-500 fill-indigo-500/10 shrink-0" />
+                  <span className="text-[11px] font-semibold font-mono hidden sm:inline text-slate-700">Night Mode</span>
+                </>
+              )}
+            </button>
+
             {/* Global Loader Indicator */}
             {isProcessing && (
               <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
-                <span className="hidden sm:inline">AI Processing...</span>
+                <span className="hidden lg:inline">AI Processing...</span>
               </span>
             )}
             <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 bg-slate-950 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded border border-slate-800">

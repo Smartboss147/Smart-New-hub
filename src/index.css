@@ -1,1 +1,125 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Global Light Theme High-Contrast Overrides */
+.theme-light {
+  /* Slate variables mapped to bright, readable slate scales */
+  --color-slate-950: #ffffff; /* Root canvas */
+  --color-slate-900: #f8fafc; /* Sidebar and cards */
+  --color-slate-850: #e2e8f0; /* Borders */
+  --color-slate-800: #cbd5e1; /* High-contrast borders */
+  --color-slate-750: #94a3b8;
+  --color-slate-700: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-500: #334155;
+  --color-slate-400: #1e293b;
+  --color-slate-300: #0f172a;
+  --color-slate-200: #0f172a;
+  --color-slate-100: #0f172a;
+  --color-slate-50: #0f172a;
+
+  /* Custom overrides for root container */
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Overrides for better daytime contrast & readability */
+.theme-light .text-slate-400 {
+  color: #334155 !important;
+}
+.theme-light .text-slate-500 {
+  color: #475569 !important;
+}
+.theme-light .text-slate-600 {
+  color: #64748b !important;
+}
+
+/* Text-white elements should become dark slate on light backgrounds */
+.theme-light .text-white,
+.theme-light h1.text-white,
+.theme-light h2.text-white,
+.theme-light h3.text-white,
+.theme-light h4.text-white,
+.theme-light h5.text-white,
+.theme-light .font-mono.text-white {
+  color: #0f172a !important;
+}
+
+/* Ensure placeholder texts are properly visible and not too dark or light */
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* High-contrast colors for badges and alerts */
+.theme-light .text-sky-400 {
+  color: #0284c7 !important;
+}
+.theme-light .bg-sky-500\/10 {
+  background-color: rgba(14, 165, 233, 0.1) !important;
+  border-color: rgba(14, 165, 233, 0.25) !important;
+}
+.theme-light .text-indigo-400 {
+  color: #4f46e5 !important;
+}
+.theme-light .bg-indigo-600\/15 {
+  background-color: rgba(79, 70, 229, 0.12) !important;
+}
+.theme-light .text-purple-400 {
+  color: #7c3aed !important;
+}
+.theme-light .bg-purple-500\/10 {
+  background-color: rgba(124, 58, 237, 0.1) !important;
+}
+.theme-light .text-amber-400 {
+  color: #b45309 !important;
+}
+.theme-light .bg-amber-500\/10 {
+  background-color: rgba(217, 119, 6, 0.1) !important;
+}
+.theme-light .text-emerald-400 {
+  color: #15803d !important;
+}
+.theme-light .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+.theme-light .text-rose-400 {
+  color: #be123c !important;
+}
+.theme-light .bg-rose-500\/10 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+/* Retain white text for solid badge/button components */
+.theme-light .bg-sky-600 *,
+.theme-light .bg-sky-500 *,
+.theme-light .bg-indigo-600 *,
+.theme-light .bg-emerald-600 *,
+.theme-light .bg-rose-600 *,
+.theme-light button.bg-sky-600 *,
+.theme-light button.bg-indigo-600 *,
+.theme-light button.bg-emerald-600 *,
+.theme-light .bg-gradient-to-r *,
+.theme-light .bg-sky-600,
+.theme-light .bg-indigo-600,
+.theme-light .bg-emerald-600,
+.theme-light .bg-gradient-to-r {
+  color: #ffffff !important;
+}
+
+/* Navigation & hover adjustments */
+.theme-light .hover\:bg-slate-800\/60:hover {
+  background-color: rgba(148, 163, 184, 0.15) !important;
+}
+.theme-light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* Modals backdrop high-contrast blur adjustment */
+.theme-light .bg-slate-950\/80 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+}

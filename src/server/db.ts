@@ -68,6 +68,15 @@ const DEFAULT_SOURCES: Source[] = [
     category: 'Gaming',
     isActive: true,
     addedAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'src-tundeednut',
+    name: '@mazi_tundeednut Instagram',
+    type: 'instagram_handle',
+    url: '@mazi_tundeednut',
+    category: 'Entertainment',
+    isActive: true,
+    addedAt: new Date().toISOString()
   }
 ];
 

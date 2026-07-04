@@ -51,7 +51,7 @@ export default function Sidebar({
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div className="truncate">
-            <h1 className="font-bold text-white text-lg leading-tight tracking-tight">X Content</h1>
+            <h1 className="font-bold text-white text-lg leading-tight tracking-tight">Smart News Hub</h1>
             <span className="text-xs text-slate-500 font-mono">AI Studio v1.0</span>
           </div>
         </div>

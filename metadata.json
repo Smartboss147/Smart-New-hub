@@ -1,5 +1,5 @@
 {
-  "name": "X AI Content Manager",
+  "name": "Smart News Hub",
   "description": "A modern web application to monitor news and social feeds, generate original high-quality content using AI, check plagiarism and similarity, and approve or schedule posts directly to X (Twitter).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
