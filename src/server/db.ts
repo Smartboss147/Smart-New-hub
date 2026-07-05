@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getDatabase } from 'firebase-admin/database';
 import { Source, Post, BettingTip } from '../types.js';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
@@ -366,20 +368,31 @@ const INITIAL_STATE: DBState = {
   }
 };
 
-export function getDB(): DBState {
+let cachedState: DBState = INITIAL_STATE;
+let isInitialized = false;
+
+let dbStatus = {
+  isConfigured: false,
+  isConnected: false,
+  error: null as string | null,
+  firebaseUrl: null as string | null
+};
+
+export function getDBStatus() {
+  return dbStatus;
+}
+
+function getLocalDB(): DBState {
   try {
     if (!fs.existsSync(DB_FILE)) {
-      saveDB(INITIAL_STATE);
+      fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_STATE, null, 2), 'utf-8');
       return INITIAL_STATE;
     }
     const data = fs.readFileSync(DB_FILE, 'utf-8');
     const parsed = JSON.parse(data);
-    // Ensure structure is correct
     if (!parsed.sources || !parsed.posts) {
-      saveDB(INITIAL_STATE);
       return INITIAL_STATE;
     }
-    // Backward compatibility for xHandle
     if (!parsed.xConfig) {
       parsed.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
     } else if (!parsed.xConfig.xHandle) {
@@ -390,16 +403,243 @@ export function getDB(): DBState {
     }
     return parsed;
   } catch (err) {
-    console.error('Error reading DB, returning default:', err);
+    console.error('Error reading local DB:', err);
     return INITIAL_STATE;
   }
 }
 
+let dbRef: any = null;
+
+async function initDBREST(dbUrl: string): Promise<void> {
+  const normalizedUrl = `${dbUrl.replace(/\/$/, '')}/db.json`;
+  const secret = process.env.FIREBASE_DATABASE_SECRET;
+  const requestUrl = secret ? `${normalizedUrl}?auth=${secret}` : normalizedUrl;
+
+  console.log(`Connecting and initializing database via REST API: ${dbUrl}`);
+  const res = await fetch(requestUrl);
+  if (res.ok) {
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      if (!data.sources) data.sources = DEFAULT_SOURCES;
+      if (!data.posts) data.posts = DEFAULT_POSTS;
+      if (!data.bettingTips) data.bettingTips = DEFAULT_BETTING_TIPS;
+      if (!data.xConfig) {
+        data.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
+      } else if (!data.xConfig.xHandle) {
+        data.xConfig.xHandle = '@AIPressRoom';
+      }
+      cachedState = data as DBState;
+      console.log('Successfully synchronized cache with Firebase Realtime Database via REST.');
+    } else {
+      console.log('Firebase Realtime Database is currently empty. Seeding INITIAL_STATE...');
+      cachedState = INITIAL_STATE;
+      await saveDBToFirebase(INITIAL_STATE);
+    }
+    dbStatus.isConnected = true;
+    dbStatus.error = null;
+  } else {
+    let statusText = `Status ${res.status}`;
+    if (res.status === 401) {
+      const saSecret = process.env.FIREBASE_DATABASE_SECRET || '';
+      const saEnv = process.env.FIREBASE_SERVICE_ACCOUNT || '';
+      if (saSecret.includes('BEGIN PRIVATE KEY') || saEnv.includes('BEGIN PRIVATE KEY')) {
+        statusText = `Status 401: Unauthorized. Raw PEM Private Key detected in environment. You have pasted the raw Private Key instead of the full Service Account JSON object. Please paste the ENTIRE downloaded service account JSON file (which contains 'private_key', 'client_email', 'project_id', etc.) into your FIREBASE_SERVICE_ACCOUNT environment variable.`;
+      } else {
+        statusText = `Status 401: Unauthorized. Please verify your FIREBASE_DATABASE_SECRET matches your database rules, or set up a valid service account in FIREBASE_SERVICE_ACCOUNT.`;
+      }
+    }
+    console.error(`Firebase Realtime Database connection returned status ${res.status}. Falling back to local db.json.`);
+    dbStatus.error = statusText;
+    cachedState = getLocalDB();
+  }
+}
+
+function parseServiceAccount(val: string): any {
+  if (!val) return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  
+  // If it's a placeholder like "-" or "none", skip it
+  if (trimmed === '-' || trimmed === 'none' || trimmed === 'null' || trimmed === 'undefined') {
+    return null;
+  }
+
+  // Check if it's a raw private key PEM string instead of JSON
+  if (trimmed.startsWith('-----BEGIN PRIVATE KEY-----')) {
+    throw new Error("Value is a raw RSA Private Key PEM string, not a JSON service account object. You must paste the ENTIRE JSON content of your downloaded service account key file (containing 'private_key', 'client_email', 'project_id', etc.) into FIREBASE_SERVICE_ACCOUNT.");
+  }
+
+  // Try parsing directly first
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    // If that fails, try to extract JSON from the string
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = trimmed.substring(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (innerError) {
+        // Fall through
+      }
+    }
+    throw e; // throw original error if both failed
+  }
+}
+
+export async function initDB(): Promise<void> {
+  const dbUrl = process.env.FIREBASE_DATABASE_URL;
+  dbStatus.firebaseUrl = dbUrl || null;
+  dbStatus.isConfigured = !!dbUrl;
+
+  if (!dbUrl) {
+    console.log('Firebase Database URL not set. Initializing with local db.json.');
+    cachedState = getLocalDB();
+    isInitialized = true;
+    return;
+  }
+
+  try {
+    let credential: any = null;
+
+    // 1. Check for FIREBASE_SERVICE_ACCOUNT env variable
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const sa = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
+        if (sa) {
+          credential = cert(sa);
+          console.log('Using Firebase Service Account from environment variable.');
+        }
+      } catch (e: any) {
+        console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable:', e);
+        dbStatus.error = e.message;
+      }
+    }
+
+    // 2. Check for local serviceAccountKey.json file
+    if (!credential) {
+      const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
+      if (fs.existsSync(keyPath)) {
+        try {
+          const fileContent = fs.readFileSync(keyPath, 'utf-8');
+          const sa = JSON.parse(fileContent);
+          credential = cert(sa);
+          console.log('Using Firebase Service Account from local serviceAccountKey.json file.');
+        } catch (e: any) {
+          console.error('Failed to parse local serviceAccountKey.json file:', e);
+        }
+      }
+    }
+
+    // If no service account credential found, fall back to legacy REST method
+    if (!credential) {
+      console.log('No service account credential found. Falling back to public REST/fetch connection.');
+      await initDBREST(dbUrl);
+      isInitialized = true;
+      return;
+    }
+
+    console.log(`Connecting and initializing database from Firebase Realtime Database via Admin SDK: ${dbUrl}`);
+    
+    // Initialize Admin SDK App if not already initialized
+    if (getApps().length === 0) {
+      initializeApp({
+        credential,
+        databaseURL: dbUrl
+      });
+    }
+
+    const db = getDatabase();
+    dbRef = db.ref('db'); // We store our DB state under the root 'db' node
+
+    const snapshot = await dbRef.once('value');
+    const data = snapshot.val();
+
+    if (data && typeof data === 'object') {
+      if (!data.sources) data.sources = DEFAULT_SOURCES;
+      if (!data.posts) data.posts = DEFAULT_POSTS;
+      if (!data.bettingTips) data.bettingTips = DEFAULT_BETTING_TIPS;
+      if (!data.xConfig) {
+        data.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
+      } else if (!data.xConfig.xHandle) {
+        data.xConfig.xHandle = '@AIPressRoom';
+      }
+      cachedState = data as DBState;
+      console.log('Successfully synchronized cache with Firebase Realtime Database (via Admin SDK).');
+    } else {
+      console.log('Firebase Realtime Database "db" node is empty. Seeding INITIAL_STATE...');
+      cachedState = INITIAL_STATE;
+      await dbRef.set(INITIAL_STATE);
+    }
+    dbStatus.isConnected = true;
+    dbStatus.error = null;
+  } catch (error: any) {
+    console.error('Failed to connect to Firebase Realtime Database via Admin SDK:', error);
+    dbStatus.error = error.message || String(error);
+    console.log('Falling back to local db.json.');
+    cachedState = getLocalDB();
+  }
+  isInitialized = true;
+}
+
+async function saveDBToFirebase(state: DBState): Promise<void> {
+  if (dbRef) {
+    try {
+      await dbRef.set(state);
+      console.log('Database successfully saved to Firebase Realtime Database using Admin SDK.');
+      return;
+    } catch (err: any) {
+      console.error('Failed to save to Firebase Realtime Database via Admin SDK, falling back to REST:', err);
+    }
+  }
+
+  const dbUrl = process.env.FIREBASE_DATABASE_URL;
+  if (!dbUrl) return;
+
+  const normalizedUrl = `${dbUrl.replace(/\/$/, '')}/db.json`;
+  const secret = process.env.FIREBASE_DATABASE_SECRET;
+  const requestUrl = secret ? `${normalizedUrl}?auth=${secret}` : normalizedUrl;
+
+  try {
+    const res = await fetch(requestUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    if (!res.ok) {
+      console.error(`Failed to write to Firebase via REST: ${res.statusText}`);
+    }
+  } catch (err) {
+    console.error('Error writing database to Firebase via REST:', err);
+  }
+}
+
+export function getDB(): DBState {
+  if (!isInitialized) {
+    return getLocalDB();
+  }
+  return cachedState;
+}
+
 export function saveDB(state: DBState): void {
+  cachedState = state;
+  
+  // Save locally
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error writing DB:', err);
+    console.error('Error writing local DB file:', err);
+  }
+
+  // Save to Firebase asynchronously in background
+  const dbUrl = process.env.FIREBASE_DATABASE_URL;
+  if (dbUrl) {
+    saveDBToFirebase(state).then(() => {
+      console.log('Firebase Realtime Database synchronized.');
+    }).catch(err => {
+      console.error('Async Firebase write failed:', err);
+    });
   }
 }
 

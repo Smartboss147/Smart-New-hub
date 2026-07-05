@@ -16,7 +16,9 @@ import {
   getBettingTips,
   saveBettingTips,
   addBettingTip,
-  updateBettingTip
+  updateBettingTip,
+  initDB,
+  getDBStatus
 } from './src/server/db.js';
 import { calculateSimilarity, evaluatePostSafety } from './src/utils.js';
 
@@ -44,6 +46,15 @@ const rssParser = new Parser();
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// Database Connection Status Check
+app.get('/api/db-status', (req, res) => {
+  try {
+    res.json(getDBStatus());
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Sources Endpoints
@@ -751,6 +762,9 @@ app.post('/api/sources/monitor', async (req, res) => {
 // -----------------------------------------------------------------------------
 
 async function startServer() {
+  // Initialize database (syncs with Firebase Realtime Database if configured)
+  await initDB();
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
