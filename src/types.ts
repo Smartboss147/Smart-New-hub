@@ -58,3 +58,18 @@ export interface AppState {
     xHandle?: string;
   };
 }
+
+export interface BettingTip {
+  id: string;
+  date: string;
+  fixture: string;
+  league: string;
+  prediction: string;
+  odds: number;
+  analysis: string;
+  confidence: number;
+  bookingCode: string;
+  bookingPlatform: string;
+  status: 'pending' | 'won' | 'lost';
+}
+

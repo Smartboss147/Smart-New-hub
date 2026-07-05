@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp, Sun, Moon } from 'lucide-react';
+import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp, Sun, Moon, Volume2, VolumeX } from 'lucide-react';
 import Sidebar from './components/Sidebar.tsx';
 import ApprovalDashboard from './components/ApprovalDashboard.tsx';
 import ManualPublisher from './components/ManualPublisher.tsx';
@@ -8,7 +8,8 @@ import CalendarScheduler from './components/CalendarScheduler.tsx';
 import PostHistory from './components/PostHistory.tsx';
 import XSettings from './components/XSettings.tsx';
 import AnalyticsView from './components/AnalyticsView.tsx';
-import { Source, Post } from './types.ts';
+import { Source, Post, BettingTip } from './types.ts';
+import BettingTipsDashboard from './components/BettingTipsDashboard.tsx';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -18,8 +19,78 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [bettingTips, setBettingTips] = useState<BettingTip[]>([]);
+  const [isGeneratingTips, setIsGeneratingTips] = useState<boolean>(false);
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Audio notification settings & sound synthesizer
+  const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('soundEnabled') !== 'false';
+  });
+
+  const playNotificationSound = (type: 'info' | 'success' | 'alert' = 'info') => {
+    if (!isSoundEnabled) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      if (type === 'success') {
+        // High-contrast clean dual-tone ascending chime (C5 -> E5 -> G5)
+        const playTone = (freq: number, start: number, duration: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0, start);
+          gain.gain.linearRampToValueAtTime(0.12, start + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+          osc.start(start);
+          osc.stop(start + duration);
+        };
+        playTone(523.25, ctx.currentTime, 0.25);
+        playTone(659.25, ctx.currentTime + 0.08, 0.35);
+        playTone(783.99, ctx.currentTime + 0.16, 0.45);
+      } else if (type === 'alert') {
+        // Bright warning / hot trend detuned chime
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+        osc1.type = 'triangle';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc2.frequency.setValueAtTime(592.33, ctx.currentTime);
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 0.5);
+        osc2.stop(ctx.currentTime + 0.5);
+      } else {
+        // Simple ambient info notification beep
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.10, ctx.currentTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      }
+    } catch (e) {
+      console.warn('AudioContext play error:', e);
+    }
+  };
 
   // Notifications
   const [notification, setNotification] = useState<{
@@ -29,6 +100,9 @@ export default function App() {
 
   const showNotification = (type: 'success' | 'info' | 'error', message: string) => {
     setNotification({ type, message });
+    // Play sound on notification event
+    const soundType = type === 'success' ? 'success' : type === 'error' ? 'alert' : 'info';
+    playNotificationSound(soundType);
     setTimeout(() => setNotification(null), 5000);
   };
 
@@ -60,14 +134,17 @@ export default function App() {
   // Data Loading
   const loadData = async () => {
     try {
-      const [sourcesRes, postsRes] = await Promise.all([
+      const [sourcesRes, postsRes, tipsRes] = await Promise.all([
         fetch('/api/sources'),
-        fetch('/api/posts')
+        fetch('/api/posts'),
+        fetch('/api/betting-tips')
       ]);
       const sourcesData = await sourcesRes.json();
       const postsData = await postsRes.json();
+      const tipsData = await tipsRes.json();
       setSources(sourcesData);
       setPosts(postsData);
+      setBettingTips(tipsData);
     } catch (err) {
       console.error('Error loading initial data:', err);
       showNotification('error', 'Could not sync data with server. Check database JSON connection.');
@@ -92,6 +169,50 @@ export default function App() {
       document.documentElement.classList.remove('theme-light');
     }
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('soundEnabled', String(isSoundEnabled));
+  }, [isSoundEnabled]);
+
+  // Betting Tips Action Handlers
+  const handleGenerateTips = async () => {
+    setIsGeneratingTips(true);
+    try {
+      const res = await fetch('/api/betting-tips/generate', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success && data.tips) {
+        setBettingTips(data.tips);
+        showNotification('success', '🏆 Fresh daily analyzed betting tips generated successfully!');
+      } else {
+        showNotification('error', 'Failed to generate analyzed betting tips.');
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('error', 'Error calling expert betting analysis engine.');
+    } finally {
+      setIsGeneratingTips(false);
+    }
+  };
+
+  const handleUpdateTipStatus = async (id: string, status: 'pending' | 'won' | 'lost') => {
+    try {
+      const res = await fetch('/api/betting-tips/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      });
+      const data = await res.json();
+      if (data.success && data.tips) {
+        setBettingTips(data.tips);
+        showNotification('success', `Betting tip marked as: ${status.toUpperCase()}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('error', 'Failed to update betting tip status.');
+    }
+  };
 
   // Source Handlers
   const handleAddSource = async (sourceData: Omit<Source, 'id' | 'addedAt'>) => {
@@ -234,6 +355,7 @@ export default function App() {
       if (data.trendAlert) {
         setActiveTrend(data.trendAlert);
         triggerBrowserNotification(data.trendAlert);
+        playNotificationSound('alert');
       }
 
       if (data.newPendingPostsCreated > 0) {
@@ -275,6 +397,16 @@ export default function App() {
             onUpdateSource={handleUpdateSource}
             isMonitoring={isMonitoring}
             onMonitor={handleMonitorFeeds}
+          />
+        );
+      case 'betting_tips':
+        return (
+          <BettingTipsDashboard
+            tips={bettingTips}
+            onGenerate={handleGenerateTips}
+            onUpdateStatus={handleUpdateTipStatus}
+            isGenerating={isGeneratingTips}
+            theme={theme}
           />
         );
       case 'calendar':
@@ -338,6 +470,58 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Sound Notification Toggle Button */}
+            <button
+              onClick={() => {
+                const nextState = !isSoundEnabled;
+                setIsSoundEnabled(nextState);
+                if (nextState) {
+                  // Play a quick test sound to confirm audio is active and working!
+                  setTimeout(() => {
+                    try {
+                      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                      if (AudioContextClass) {
+                        const ctx = new AudioContextClass();
+                        const playTone = (freq: number, start: number, duration: number) => {
+                          const osc = ctx.createOscillator();
+                          const gain = ctx.createGain();
+                          osc.connect(gain);
+                          gain.connect(ctx.destination);
+                          osc.type = 'sine';
+                          osc.frequency.setValueAtTime(freq, start);
+                          gain.gain.setValueAtTime(0, start);
+                          gain.gain.linearRampToValueAtTime(0.12, start + 0.04);
+                          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+                          osc.start(start);
+                          osc.stop(start + duration);
+                        };
+                        playTone(523.25, ctx.currentTime, 0.25);
+                        playTone(659.25, ctx.currentTime + 0.08, 0.35);
+                        playTone(783.99, ctx.currentTime + 0.16, 0.45);
+                      }
+                    } catch (e) {
+                      console.warn(e);
+                    }
+                  }, 50);
+                }
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer shadow-sm shrink-0"
+              title={isSoundEnabled ? 'Disable Sound Notifications' : 'Enable Sound Notifications & Test Play'}
+              id="sound-notification-toggle"
+            >
+              {isSoundEnabled ? (
+                <>
+                  <Volume2 className="w-4 h-4 text-emerald-400 fill-emerald-400/10 shrink-0" />
+                  <span className={`text-[11px] font-semibold font-mono hidden sm:inline ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Sound On</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className={`text-[11px] font-semibold font-mono hidden sm:inline ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Muted</span>
+                </>
+              )}
+            </button>
+
             {/* Global Theme Toggle Button */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}

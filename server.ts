@@ -12,7 +12,11 @@ import {
   updatePost,
   deletePost,
   getXConfig,
-  saveXConfig
+  saveXConfig,
+  getBettingTips,
+  saveBettingTips,
+  addBettingTip,
+  updateBettingTip
 } from './src/server/db.js';
 import { calculateSimilarity, evaluatePostSafety } from './src/utils.js';
 
@@ -199,6 +203,106 @@ app.post('/api/x-config', (req, res) => {
     const isConnected = !!(apiKey && apiSecret && accessToken && accessSecret);
     saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected, xHandle });
     res.json({ message: 'X configuration updated', isConnected });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// BETTING TIPS ENDPOINTS
+// -----------------------------------------------------------------------------
+
+app.get('/api/betting-tips', (req, res) => {
+  try {
+    res.json(getBettingTips());
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/betting-tips/generate', async (req, res) => {
+  try {
+    const promptText = `
+      You are an elite, world-class professional sports analyst and seasoned football bet statistician.
+      Generate exactly 5 highly accurate (90% to 100% win-probability, "sure banker") soccer betting tips and bookings codes for upcoming matches.
+      
+      For each match tip, you must provide:
+      1. fixture (e.g., "Arsenal vs Chelsea", "Real Madrid vs Barcelona", etc. Use high-profile matches matching current real-world soccer tournaments)
+      2. league (e.g., "English Premier League", "UEFA Champions League", "La Liga (Spain)", etc.)
+      3. prediction (e.g., "Over 2.5 Goals", "Home Win & Under 4.5", "GG (Both Teams to Score)", "Away Draw No Bet")
+      4. odds (a realistic decimal odd, between 1.30 and 2.45)
+      5. confidence (a realistic high-confidence value between 92 and 99 percent)
+      6. analysis (a deep, professional 2-3 sentence statistical analysis explaining precisely why this tip is extremely secure. Cite team forms, defensive injuries, key match-up details, or expected goals xG metrics)
+      7. bookingCode (a realistic 7-character randomized alphanumeric uppercase Booking Code, e.g., "BC93K4W", "SP88X2Y")
+      8. bookingPlatform (choose "SportyBet" or "Bet9ja" dynamically)
+      
+      Provide exactly 5 tips in a clean JSON array structure.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: promptText,
+      config: {
+        systemInstruction: 'You are an elite sports betting analyst. Generate 5 highly realistic, professional, and well-analyzed betting tips in JSON format.',
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              fixture: { type: Type.STRING },
+              league: { type: Type.STRING },
+              prediction: { type: Type.STRING },
+              odds: { type: Type.NUMBER },
+              confidence: { type: Type.NUMBER },
+              analysis: { type: Type.STRING },
+              bookingCode: { type: Type.STRING },
+              bookingPlatform: { type: Type.STRING }
+            },
+            required: ['fixture', 'league', 'prediction', 'odds', 'confidence', 'analysis', 'bookingCode', 'bookingPlatform']
+          }
+        }
+      }
+    });
+
+    const text = response.text || '[]';
+    const parsedTips = JSON.parse(text);
+
+    // Map tips with fresh IDs, current dates, and default 'pending' status
+    const formattedTips = parsedTips.map((tip: any, index: number) => ({
+      id: `tip-gen-${Date.now()}-${index}`,
+      date: new Date().toISOString().split('T')[0],
+      fixture: tip.fixture,
+      league: tip.league,
+      prediction: tip.prediction,
+      odds: tip.odds || 1.50,
+      confidence: tip.confidence || 95,
+      analysis: tip.analysis,
+      bookingCode: tip.bookingCode || Math.random().toString(36).substring(2, 9).toUpperCase(),
+      bookingPlatform: tip.bookingPlatform || 'SportyBet',
+      status: 'pending'
+    }));
+
+    // Update DB with the new tips
+    saveBettingTips(formattedTips);
+
+    res.json({ success: true, tips: formattedTips });
+  } catch (error: any) {
+    console.error('Error generating betting tips:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/betting-tips/status', (req, res) => {
+  try {
+    const { id, status } = req.body;
+    if (!id || !status) {
+      return res.status(400).json({ error: 'Missing id or status' });
+    }
+    const tips = getBettingTips();
+    const updatedTips = tips.map(t => t.id === id ? { ...t, status } : t);
+    saveBettingTips(updatedTips);
+    res.json({ success: true, tips: updatedTips });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Source, Post } from '../types.js';
+import { Source, Post, BettingTip } from '../types.js';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 
@@ -13,6 +13,7 @@ if (!fs.existsSync(dir)) {
 interface DBState {
   sources: Source[];
   posts: Post[];
+  bettingTips?: BettingTip[];
   xConfig: {
     apiKey: string;
     apiSecret: string;
@@ -283,9 +284,78 @@ const DEFAULT_POSTS: Post[] = [
   }
 ];
 
+const DEFAULT_BETTING_TIPS: BettingTip[] = [
+  {
+    id: 'tip-1',
+    date: new Date().toISOString().split('T')[0],
+    fixture: 'Real Madrid vs Real Sociedad',
+    league: 'La Liga (Spain)',
+    prediction: 'Real Madrid to Win & Over 1.5 Goals',
+    odds: 1.58,
+    analysis: 'Real Madrid has won 8 of their last 9 home matches at the Santiago Bernabeu, averaging 2.4 goals per game. Real Sociedad is currently struggling with key defensive injuries (including their starting center-back) and has failed to keep a clean sheet in their last 5 away games. Combined with Vinicius Jr. and Mbappe in red-hot form, a home win with at least two goals is highly secure.',
+    confidence: 98,
+    bookingCode: 'RM83K9W',
+    bookingPlatform: 'SportyBet',
+    status: 'pending'
+  },
+  {
+    id: 'tip-2',
+    date: new Date().toISOString().split('T')[0],
+    fixture: 'Manchester City vs Crystal Palace',
+    league: 'Premier League (England)',
+    prediction: 'Manchester City Handicap (-1) or Over 2.5 Goals',
+    odds: 1.45,
+    analysis: 'City is chasing the title and cannot afford any slip-ups at home. Crystal Palace has conceded 12 goals in their last 4 away outings. Historically, City dominates possession at home (average 68%) and creates high xG (2.35). Expect an emphatic, comfortable win with plenty of goals from Haaland and De Bruyne.',
+    confidence: 96,
+    bookingCode: 'MC92P4L',
+    bookingPlatform: 'Bet9ja',
+    status: 'pending'
+  },
+  {
+    id: 'tip-3',
+    date: new Date().toISOString().split('T')[0],
+    fixture: 'Bayern Munich vs FC Koln',
+    league: 'Bundesliga (Germany)',
+    prediction: 'Bayern Munich Individual Team Goals Over 2.5',
+    odds: 1.62,
+    analysis: 'Bayern Munich leads the Bundesliga in goalscoring metrics, averaging 3.1 goals per game. Koln has the second worst defensive record in the league and has shown heavy vulnerability on set pieces. At Allianz Arena, Bayern is expected to comfortably cross the 3-goal threshold.',
+    confidence: 95,
+    bookingCode: 'BM44A7Z',
+    bookingPlatform: 'SportyBet',
+    status: 'pending'
+  },
+  {
+    id: 'tip-4',
+    date: new Date().toISOString().split('T')[0],
+    fixture: 'Inter Milan vs Monza',
+    league: 'Serie A (Italy)',
+    prediction: 'Inter Milan Clean Sheet - YES',
+    odds: 1.70,
+    analysis: 'Inter Milan boasts the strongest defensive block in Italy under Inzaghi, keeping a clean sheet in 65% of their home games this season. Monza has struggled to create meaningful opportunities on the road, with an expected goals (xG) away rating of just 0.72. Expect a tactical defensive masterclass from Inter.',
+    confidence: 94,
+    bookingCode: 'IM11X8P',
+    bookingPlatform: 'SportyBet',
+    status: 'pending'
+  },
+  {
+    id: 'tip-5',
+    date: new Date().toISOString().split('T')[0],
+    fixture: 'PSG vs Nantes',
+    league: 'Ligue 1 (France)',
+    prediction: 'PSG Over 1.5 Goals in 2nd Half',
+    odds: 1.52,
+    analysis: 'PSG is known to dominate the later stages of games as opponents tire from chasing the ball. Nantes has conceded 70% of their away goals in the second half of matches. Under Luis Enrique, PSG\'s bench depth is massive, allowing impact players to exploit space late in the game.',
+    confidence: 97,
+    bookingCode: 'PG55T3C',
+    bookingPlatform: 'Bet9ja',
+    status: 'pending'
+  }
+];
+
 const INITIAL_STATE: DBState = {
   sources: DEFAULT_SOURCES,
   posts: DEFAULT_POSTS,
+  bettingTips: DEFAULT_BETTING_TIPS,
   xConfig: {
     apiKey: '',
     apiSecret: '',
@@ -314,6 +384,9 @@ export function getDB(): DBState {
       parsed.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
     } else if (!parsed.xConfig.xHandle) {
       parsed.xConfig.xHandle = '@AIPressRoom';
+    }
+    if (!parsed.bettingTips) {
+      parsed.bettingTips = DEFAULT_BETTING_TIPS;
     }
     return parsed;
   } catch (err) {
@@ -389,3 +462,36 @@ export function saveXConfig(config: DBState['xConfig']): void {
   db.xConfig = config;
   saveDB(db);
 }
+
+export function getBettingTips(): BettingTip[] {
+  return getDB().bettingTips || DEFAULT_BETTING_TIPS;
+}
+
+export function saveBettingTips(tips: BettingTip[]): void {
+  const db = getDB();
+  db.bettingTips = tips;
+  saveDB(db);
+}
+
+export function addBettingTip(tip: Omit<BettingTip, 'id'>): BettingTip {
+  const db = getDB();
+  const newTip: BettingTip = {
+    ...tip,
+    id: `tip-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+  };
+  if (!db.bettingTips) {
+    db.bettingTips = [];
+  }
+  db.bettingTips.push(newTip);
+  saveDB(db);
+  return newTip;
+}
+
+export function updateBettingTip(updatedTip: BettingTip): void {
+  const db = getDB();
+  if (db.bettingTips) {
+    db.bettingTips = db.bettingTips.map(t => t.id === updatedTip.id ? updatedTip : t);
+    saveDB(db);
+  }
+}
+

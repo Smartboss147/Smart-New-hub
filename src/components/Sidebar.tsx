@@ -8,7 +8,8 @@ import {
   Settings,
   RefreshCw,
   Sparkles,
-  X
+  X,
+  Trophy
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +37,7 @@ export default function Sidebar({
     { id: 'dashboard', name: 'Approval Queue', icon: LayoutDashboard, badge: pendingCount > 0 ? pendingCount : null },
     { id: 'publisher', name: 'Manual Composer', icon: PenSquare },
     { id: 'sources', name: 'Feed Sources', icon: Rss },
+    { id: 'betting_tips', name: 'Daily Betting Tips', icon: Trophy },
     { id: 'calendar', name: 'Content Calendar', icon: Calendar, badge: scheduledCount > 0 ? scheduledCount : null },
     { id: 'history', name: 'Post History', icon: History },
     { id: 'analytics', name: 'Analytics', icon: BarChart3 },
