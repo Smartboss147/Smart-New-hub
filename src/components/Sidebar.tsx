@@ -41,7 +41,7 @@ export default function Sidebar({
     { id: 'calendar', name: 'Content Calendar', icon: Calendar, badge: scheduledCount > 0 ? scheduledCount : null },
     { id: 'history', name: 'Post History', icon: History },
     { id: 'analytics', name: 'Analytics', icon: BarChart3 },
-    { id: 'settings', name: 'X Integration', icon: Settings }
+    { id: 'settings', name: 'Social Integrations', icon: Settings }
   ];
 
   const renderContent = (isMobile: boolean) => (

@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import Parser from 'rss-parser';
+import { TwitterApi } from 'twitter-api-v2';
 import {
   getSources,
   addSource,
@@ -13,6 +14,8 @@ import {
   deletePost,
   getXConfig,
   saveXConfig,
+  getInstagramConfig,
+  saveInstagramConfig,
   getBettingTips,
   saveBettingTips,
   addBettingTip,
@@ -38,6 +41,201 @@ const ai = new GoogleGenAI({
 });
 
 const rssParser = new Parser();
+
+// -----------------------------------------------------------------------------
+// LIVE PUBLISHING PIPELINE UTILITIES (X & INSTAGRAM)
+// -----------------------------------------------------------------------------
+
+async function uploadTwitterMedia(client: TwitterApi, imageUrl: string): Promise<string | null> {
+  try {
+    let buffer: Buffer;
+    let mimeType = 'image/jpeg';
+
+    if (imageUrl.startsWith('data:')) {
+      const matches = imageUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
+      if (!matches || matches.length !== 3) {
+        throw new Error('Invalid data URI format');
+      }
+      mimeType = matches[1];
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      // Fetch external URL
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      const contentType = response.headers.get('content-type');
+      if (contentType) mimeType = contentType;
+    }
+
+    const mediaId = await client.v1.uploadMedia(buffer, { mimeType });
+    return mediaId;
+  } catch (err) {
+    console.error('Error uploading media to Twitter:', err);
+    return null;
+  }
+}
+
+async function publishToInstagram(config: any, text: string, imageUrl: string | undefined, videoUrl: string | undefined): Promise<{ id: string } | null> {
+  try {
+    const { accessToken, businessAccountId } = config;
+    if (!accessToken || !businessAccountId) return null;
+
+    let mediaUrl = imageUrl || videoUrl;
+    if (!mediaUrl || mediaUrl.startsWith('data:')) {
+      throw new Error('Instagram Content Publishing requires a publicly accessible HTTP/HTTPS media URL. Local base64 images/videos are not supported by the Meta API.');
+    }
+
+    const isVideo = !!videoUrl;
+    let containerEndpoint = `https://graph.facebook.com/v19.0/${businessAccountId}/media`;
+    
+    // 1. Create Media Container
+    const containerParams = new URLSearchParams();
+    containerParams.append('caption', text);
+    containerParams.append('access_token', accessToken);
+    if (isVideo) {
+      containerParams.append('media_type', 'REELS');
+      containerParams.append('video_url', mediaUrl);
+    } else {
+      containerParams.append('image_url', mediaUrl);
+    }
+
+    const containerRes = await fetch(`${containerEndpoint}?${containerParams.toString()}`, {
+      method: 'POST'
+    });
+    
+    if (!containerRes.ok) {
+      const errData = await containerRes.json().catch(() => ({}));
+      throw new Error(`Instagram container creation failed: ${JSON.stringify(errData)}`);
+    }
+
+    const containerData = await containerRes.json();
+    const creationId = containerData.id;
+
+    if (!creationId) {
+      throw new Error('No creation ID returned from Instagram');
+    }
+
+    if (isVideo) {
+      let isReady = false;
+      let attempts = 0;
+      while (!isReady && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        attempts++;
+        const statusRes = await fetch(`https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${accessToken}`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (statusData.status_code === 'FINISHED') {
+            isReady = true;
+          } else if (statusData.status_code === 'ERROR') {
+            throw new Error('Instagram video processing failed');
+          }
+        }
+      }
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    // 2. Publish Media Container
+    const publishEndpoint = `https://graph.facebook.com/v19.0/${businessAccountId}/media_publish`;
+    const publishParams = new URLSearchParams();
+    publishParams.append('creation_id', creationId);
+    publishParams.append('access_token', accessToken);
+
+    const publishRes = await fetch(`${publishEndpoint}?${publishParams.toString()}`, {
+      method: 'POST'
+    });
+
+    if (!publishRes.ok) {
+      const errData = await publishRes.json().catch(() => ({}));
+      throw new Error(`Instagram media publish failed: ${JSON.stringify(errData)}`);
+    }
+
+    const publishData = await publishRes.json();
+    return { id: publishData.id };
+  } catch (err: any) {
+    console.error('Error publishing to Instagram:', err);
+    throw err;
+  }
+}
+
+async function handlePublishPipeline(post: any) {
+  const xConfig = getXConfig();
+  const instaConfig = getInstagramConfig();
+
+  const logs: string[] = [];
+  let isXSuccess = false;
+  let isInstaSuccess = false;
+  let xUrl = '';
+  let instaUrl = '';
+
+  // 1. Publish to X (Twitter)
+  if (xConfig && xConfig.isConnected) {
+    try {
+      const client = new TwitterApi({
+        appKey: xConfig.apiKey,
+        appSecret: xConfig.apiSecret,
+        accessToken: xConfig.accessToken,
+        accessSecret: xConfig.accessSecret,
+      });
+
+      let mediaId: string | null = null;
+      if (post.imageUrl) {
+        mediaId = await uploadTwitterMedia(client, post.imageUrl);
+      }
+
+      const tweetOptions: any = {};
+      if (mediaId) {
+        tweetOptions.media = { media_ids: [mediaId] };
+      }
+
+      const response = await client.v2.tweet(post.selectedPostText, tweetOptions);
+      if (response && response.data && response.data.id) {
+        isXSuccess = true;
+        const handle = xConfig.xHandle ? xConfig.xHandle.replace('@', '') : 'user';
+        xUrl = `https://x.com/${handle}/status/${response.data.id}`;
+        logs.push(`X Post Successful: ${xUrl}`);
+      }
+    } catch (err: any) {
+      console.error('X publishing failed:', err);
+      logs.push(`X Error: ${err.message || String(err)}`);
+    }
+  }
+
+  // 2. Publish to Instagram
+  if (instaConfig && instaConfig.isConnected) {
+    try {
+      const result = await publishToInstagram(instaConfig, post.selectedPostText, post.imageUrl, post.videoUrl);
+      if (result && result.id) {
+        isInstaSuccess = true;
+        const handle = instaConfig.instagramHandle ? instaConfig.instagramHandle.replace('@', '') : 'user';
+        instaUrl = `https://instagram.com/${handle}`;
+        logs.push(`Instagram Post Successful: ${instaUrl} (ID: ${result.id})`);
+      }
+    } catch (err: any) {
+      console.error('Instagram publishing failed:', err);
+      logs.push(`Instagram Error: ${err.message || String(err)}`);
+    }
+  }
+
+  // 3. Fallback/Sandbox simulation logs
+  if ((!xConfig || !xConfig.isConnected) && (!instaConfig || !instaConfig.isConnected)) {
+    const handleX = xConfig?.xHandle || '@AIPressRoom';
+    const handleInsta = instaConfig?.instagramHandle || '@AISportsHub';
+    logs.push(`[SANDBOX SIMULATION] Successfully simulated publish to X (${handleX}) and Instagram (${handleInsta}).`);
+  }
+
+  post.safetyStatus = {
+    ...post.safetyStatus,
+    riskMessage: logs.join(' | ')
+  };
+  post.xUrl = xUrl || undefined;
+  post.instagramUrl = instaUrl || undefined;
+
+  return post;
+}
 
 // -----------------------------------------------------------------------------
 // ENDPOINTS
@@ -100,7 +298,7 @@ app.get('/api/posts', (req, res) => {
 });
 
 // Manual Post Creation / Drafts
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', async (req, res) => {
   try {
     const {
       sourceName,
@@ -150,6 +348,11 @@ app.post('/api/posts', (req, res) => {
       targetXHandle: targetXHandle || getXConfig()?.xHandle || '@AIPressRoom'
     });
 
+    if (status === 'published') {
+      await handlePublishPipeline(post);
+      updatePost(post);
+    }
+
     res.status(201).json(post);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -157,7 +360,7 @@ app.post('/api/posts', (req, res) => {
 });
 
 // Update Post (Approve, Edit, Reject, Schedule)
-app.put('/api/posts/:id', (req, res) => {
+app.put('/api/posts/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const posts = getPosts();
@@ -181,6 +384,7 @@ app.put('/api/posts/:id', (req, res) => {
     // Set published timestamp if status is updated to published
     if (req.body.status === 'published' && existingPost.status !== 'published') {
       updated.publishedTime = new Date().toISOString();
+      await handlePublishPipeline(updated);
     }
 
     updatePost(updated);
@@ -214,6 +418,26 @@ app.post('/api/x-config', (req, res) => {
     const isConnected = !!(apiKey && apiSecret && accessToken && accessSecret);
     saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected, xHandle });
     res.json({ message: 'X configuration updated', isConnected });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Instagram Config Settings
+app.get('/api/instagram-config', (req, res) => {
+  try {
+    res.json(getInstagramConfig());
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/instagram-config', (req, res) => {
+  try {
+    const { accessToken, businessAccountId, instagramHandle } = req.body;
+    const isConnected = !!(accessToken && businessAccountId);
+    saveInstagramConfig({ accessToken, businessAccountId, isConnected, instagramHandle });
+    res.json({ message: 'Instagram configuration updated', isConnected });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

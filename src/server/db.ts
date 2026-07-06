@@ -24,6 +24,12 @@ interface DBState {
     isConnected: boolean;
     xHandle?: string;
   };
+  instagramConfig?: {
+    accessToken: string;
+    businessAccountId: string;
+    isConnected: boolean;
+    instagramHandle?: string;
+  };
 }
 
 const DEFAULT_SOURCES: Source[] = [
@@ -365,6 +371,12 @@ const INITIAL_STATE: DBState = {
     accessSecret: '',
     isConnected: false,
     xHandle: '@AIPressRoom'
+  },
+  instagramConfig: {
+    accessToken: '',
+    businessAccountId: '',
+    isConnected: false,
+    instagramHandle: '@AISportsHub'
   }
 };
 
@@ -398,6 +410,9 @@ function getLocalDB(): DBState {
     } else if (!parsed.xConfig.xHandle) {
       parsed.xConfig.xHandle = '@AIPressRoom';
     }
+    if (!parsed.instagramConfig) {
+      parsed.instagramConfig = { accessToken: '', businessAccountId: '', isConnected: false, instagramHandle: '@AISportsHub' };
+    }
     if (!parsed.bettingTips) {
       parsed.bettingTips = DEFAULT_BETTING_TIPS;
     }
@@ -427,6 +442,9 @@ async function initDBREST(dbUrl: string): Promise<void> {
         data.xConfig = { apiKey: '', apiSecret: '', accessToken: '', accessSecret: '', isConnected: false, xHandle: '@AIPressRoom' };
       } else if (!data.xConfig.xHandle) {
         data.xConfig.xHandle = '@AIPressRoom';
+      }
+      if (!data.instagramConfig) {
+        data.instagramConfig = { accessToken: '', businessAccountId: '', isConnected: false, instagramHandle: '@AISportsHub' };
       }
       cachedState = data as DBState;
       console.log('Successfully synchronized cache with Firebase Realtime Database via REST.');
@@ -565,6 +583,9 @@ export async function initDB(): Promise<void> {
       } else if (!data.xConfig.xHandle) {
         data.xConfig.xHandle = '@AIPressRoom';
       }
+      if (!data.instagramConfig) {
+        data.instagramConfig = { accessToken: '', businessAccountId: '', isConnected: false, instagramHandle: '@AISportsHub' };
+      }
       cachedState = data as DBState;
       console.log('Successfully synchronized cache with Firebase Realtime Database (via Admin SDK).');
     } else {
@@ -700,6 +721,16 @@ export function getXConfig() {
 export function saveXConfig(config: DBState['xConfig']): void {
   const db = getDB();
   db.xConfig = config;
+  saveDB(db);
+}
+
+export function getInstagramConfig() {
+  return getDB().instagramConfig || { accessToken: '', businessAccountId: '', isConnected: false, instagramHandle: '@AISportsHub' };
+}
+
+export function saveInstagramConfig(config: DBState['instagramConfig']): void {
+  const db = getDB();
+  db.instagramConfig = config;
   saveDB(db);
 }
 
