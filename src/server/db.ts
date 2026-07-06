@@ -643,7 +643,7 @@ export function getDB(): DBState {
   return cachedState;
 }
 
-export function saveDB(state: DBState): void {
+export async function saveDB(state: DBState): Promise<void> {
   cachedState = state;
   
   // Save locally
@@ -653,14 +653,15 @@ export function saveDB(state: DBState): void {
     console.error('Error writing local DB file:', err);
   }
 
-  // Save to Firebase asynchronously in background
+  // Save to Firebase
   const dbUrl = process.env.FIREBASE_DATABASE_URL;
   if (dbUrl) {
-    saveDBToFirebase(state).then(() => {
+    try {
+      await saveDBToFirebase(state);
       console.log('Firebase Realtime Database synchronized.');
-    }).catch(err => {
-      console.error('Async Firebase write failed:', err);
-    });
+    } catch (err) {
+      console.error('Firebase write failed:', err);
+    }
   }
 }
 
@@ -668,7 +669,7 @@ export function getSources(): Source[] {
   return getDB().sources;
 }
 
-export function addSource(source: Omit<Source, 'id' | 'addedAt'>): Source {
+export async function addSource(source: Omit<Source, 'id' | 'addedAt'>): Promise<Source> {
   const db = getDB();
   const newSource: Source = {
     ...source,
@@ -676,21 +677,21 @@ export function addSource(source: Omit<Source, 'id' | 'addedAt'>): Source {
     addedAt: new Date().toISOString()
   };
   db.sources.push(newSource);
-  saveDB(db);
+  await saveDB(db);
   return newSource;
 }
 
-export function deleteSource(id: string): void {
+export async function deleteSource(id: string): Promise<void> {
   const db = getDB();
   db.sources = db.sources.filter(s => s.id !== id);
-  saveDB(db);
+  await saveDB(db);
 }
 
 export function getPosts(): Post[] {
   return getDB().posts;
 }
 
-export function addPost(post: Omit<Post, 'id' | 'detectedAt'>): Post {
+export async function addPost(post: Omit<Post, 'id' | 'detectedAt'>): Promise<Post> {
   const db = getDB();
   const newPost: Post = {
     ...post,
@@ -698,53 +699,53 @@ export function addPost(post: Omit<Post, 'id' | 'detectedAt'>): Post {
     detectedAt: new Date().toISOString()
   };
   db.posts.push(newPost);
-  saveDB(db);
+  await saveDB(db);
   return newPost;
 }
 
-export function updatePost(updatedPost: Post): void {
+export async function updatePost(updatedPost: Post): Promise<void> {
   const db = getDB();
   db.posts = db.posts.map(p => p.id === updatedPost.id ? updatedPost : p);
-  saveDB(db);
+  await saveDB(db);
 }
 
-export function deletePost(id: string): void {
+export async function deletePost(id: string): Promise<void> {
   const db = getDB();
   db.posts = db.posts.filter(p => p.id !== id);
-  saveDB(db);
+  await saveDB(db);
 }
 
 export function getXConfig() {
   return getDB().xConfig;
 }
 
-export function saveXConfig(config: DBState['xConfig']): void {
+export async function saveXConfig(config: DBState['xConfig']): Promise<void> {
   const db = getDB();
   db.xConfig = config;
-  saveDB(db);
+  await saveDB(db);
 }
 
 export function getInstagramConfig() {
   return getDB().instagramConfig || { accessToken: '', businessAccountId: '', isConnected: false, instagramHandle: '@AISportsHub' };
 }
 
-export function saveInstagramConfig(config: DBState['instagramConfig']): void {
+export async function saveInstagramConfig(config: DBState['instagramConfig']): Promise<void> {
   const db = getDB();
   db.instagramConfig = config;
-  saveDB(db);
+  await saveDB(db);
 }
 
 export function getBettingTips(): BettingTip[] {
   return getDB().bettingTips || DEFAULT_BETTING_TIPS;
 }
 
-export function saveBettingTips(tips: BettingTip[]): void {
+export async function saveBettingTips(tips: BettingTip[]): Promise<void> {
   const db = getDB();
   db.bettingTips = tips;
-  saveDB(db);
+  await saveDB(db);
 }
 
-export function addBettingTip(tip: Omit<BettingTip, 'id'>): BettingTip {
+export async function addBettingTip(tip: Omit<BettingTip, 'id'>): Promise<BettingTip> {
   const db = getDB();
   const newTip: BettingTip = {
     ...tip,
@@ -754,15 +755,15 @@ export function addBettingTip(tip: Omit<BettingTip, 'id'>): BettingTip {
     db.bettingTips = [];
   }
   db.bettingTips.push(newTip);
-  saveDB(db);
+  await saveDB(db);
   return newTip;
 }
 
-export function updateBettingTip(updatedTip: BettingTip): void {
+export async function updateBettingTip(updatedTip: BettingTip): Promise<void> {
   const db = getDB();
   if (db.bettingTips) {
     db.bettingTips = db.bettingTips.map(t => t.id === updatedTip.id ? updatedTip : t);
-    saveDB(db);
+    await saveDB(db);
   }
 }
 

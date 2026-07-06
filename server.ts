@@ -30,6 +30,24 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Ensure Database is initialized before handling any requests (crucial for Vercel Serverless)
+let initPromise: Promise<void> | null = null;
+app.use(async (req, res, next) => {
+  // Skip static assets and frontend routes to avoid overhead
+  if (req.path.startsWith('/assets') || req.path === '/' || req.path.endsWith('.html') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.png') || req.path.endsWith('.ico')) {
+    return next();
+  }
+  if (!initPromise) {
+    initPromise = initDB();
+  }
+  try {
+    await initPromise;
+    next();
+  } catch (err: any) {
+    res.status(500).json({ error: 'Database initialization failed: ' + err.message });
+  }
+});
+
 // Initialize Gemini Client
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -265,22 +283,22 @@ app.get('/api/sources', (req, res) => {
   }
 });
 
-app.post('/api/sources', (req, res) => {
+app.post('/api/sources', async (req, res) => {
   try {
     const { name, type, url, category } = req.body;
     if (!name || !type || !url || !category) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    const source = addSource({ name, type, url, category, isActive: true });
+    const source = await addSource({ name, type, url, category, isActive: true });
     res.status(201).json(source);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/sources/:id', (req, res) => {
+app.delete('/api/sources/:id', async (req, res) => {
   try {
-    deleteSource(req.params.id);
+    await deleteSource(req.params.id);
     res.json({ message: 'Source deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -325,7 +343,7 @@ app.post('/api/posts', async (req, res) => {
     const textToCompare = sourceContent || sourceTitle || '';
     const similarity = calculateSimilarity(selectedPostText, textToCompare);
 
-    const post = addPost({
+    const post = await addPost({
       sourceName: sourceName || 'Manual Entry',
       sourceTitle: sourceTitle || 'Manual Draft',
       sourceContent: sourceContent || '',
@@ -350,7 +368,7 @@ app.post('/api/posts', async (req, res) => {
 
     if (status === 'published') {
       await handlePublishPipeline(post);
-      updatePost(post);
+      await updatePost(post);
     }
 
     res.status(201).json(post);
@@ -387,16 +405,16 @@ app.put('/api/posts/:id', async (req, res) => {
       await handlePublishPipeline(updated);
     }
 
-    updatePost(updated);
+    await updatePost(updated);
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/posts/:id', (req, res) => {
+app.delete('/api/posts/:id', async (req, res) => {
   try {
-    deletePost(req.params.id);
+    await deletePost(req.params.id);
     res.json({ message: 'Post deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -412,11 +430,11 @@ app.get('/api/x-config', (req, res) => {
   }
 });
 
-app.post('/api/x-config', (req, res) => {
+app.post('/api/x-config', async (req, res) => {
   try {
     const { apiKey, apiSecret, accessToken, accessSecret, xHandle } = req.body;
     const isConnected = !!(apiKey && apiSecret && accessToken && accessSecret);
-    saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected, xHandle });
+    await saveXConfig({ apiKey, apiSecret, accessToken, accessSecret, isConnected, xHandle });
     res.json({ message: 'X configuration updated', isConnected });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -432,11 +450,11 @@ app.get('/api/instagram-config', (req, res) => {
   }
 });
 
-app.post('/api/instagram-config', (req, res) => {
+app.post('/api/instagram-config', async (req, res) => {
   try {
     const { accessToken, businessAccountId, instagramHandle } = req.body;
     const isConnected = !!(accessToken && businessAccountId);
-    saveInstagramConfig({ accessToken, businessAccountId, isConnected, instagramHandle });
+    await saveInstagramConfig({ accessToken, businessAccountId, isConnected, instagramHandle });
     res.json({ message: 'Instagram configuration updated', isConnected });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -519,7 +537,7 @@ app.post('/api/betting-tips/generate', async (req, res) => {
     }));
 
     // Update DB with the new tips
-    saveBettingTips(formattedTips);
+    await saveBettingTips(formattedTips);
 
     res.json({ success: true, tips: formattedTips });
   } catch (error: any) {
@@ -528,7 +546,7 @@ app.post('/api/betting-tips/generate', async (req, res) => {
   }
 });
 
-app.post('/api/betting-tips/status', (req, res) => {
+app.post('/api/betting-tips/status', async (req, res) => {
   try {
     const { id, status } = req.body;
     if (!id || !status) {
@@ -536,7 +554,7 @@ app.post('/api/betting-tips/status', (req, res) => {
     }
     const tips = getBettingTips();
     const updatedTips = tips.map(t => t.id === id ? { ...t, status } : t);
-    saveBettingTips(updatedTips);
+    await saveBettingTips(updatedTips);
     res.json({ success: true, tips: updatedTips });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -646,7 +664,7 @@ app.post('/api/posts/:id/regenerate', async (req, res) => {
     const otherPosts = posts.filter(p => p.id !== id).map(p => p.selectedPostText);
     post.safetyStatus = evaluatePostSafety(post.selectedPostText, otherPosts);
 
-    updatePost(post);
+    await updatePost(post);
     res.json(post);
   } catch (error: any) {
     console.error('Gemini regeneration error:', error);
@@ -882,7 +900,7 @@ app.post('/api/sources/monitor', async (req, res) => {
         const otherPosts = currentPosts.map(p => p.selectedPostText);
         const safety = evaluatePostSafety(selectedPostText, otherPosts);
 
-        addPost({
+        await addPost({
           sourceId: item.sourceId,
           sourceName: item.sourceName,
           sourceTitle: item.title,
@@ -986,6 +1004,12 @@ app.post('/api/sources/monitor', async (req, res) => {
 // -----------------------------------------------------------------------------
 
 async function startServer() {
+  // In serverless environments, we don't start the listener or Vite dev servers.
+  if (process.env.VERCEL) {
+    console.log('Running in Vercel Serverless environment.');
+    return;
+  }
+
   // Initialize database (syncs with Firebase Realtime Database if configured)
   await initDB();
 
@@ -1011,3 +1035,5 @@ async function startServer() {
 }
 
 startServer();
+
+export default app;
