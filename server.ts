@@ -22,8 +22,8 @@ import {
   updateBettingTip,
   initDB,
   getDBStatus
-} from './src/server/db.js';
-import { calculateSimilarity, evaluatePostSafety } from './src/utils.js';
+} from './src/server/db.ts';
+import { calculateSimilarity, evaluatePostSafety } from './src/utils.ts';
 
 const app = express();
 const PORT = 3000;
