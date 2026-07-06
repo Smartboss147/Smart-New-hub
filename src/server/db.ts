@@ -4,12 +4,18 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
 import { Source, Post, BettingTip } from '../types.js';
 
-const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+const DB_FILE = process.env.VERCEL 
+  ? '/tmp/db.json' 
+  : path.join(process.cwd(), 'data', 'db.json');
 
 // Make sure parent folder exists
 const dir = path.dirname(DB_FILE);
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
+try {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+} catch (err) {
+  console.error('Warning: Failed to create local DB directory:', err);
 }
 
 interface DBState {
