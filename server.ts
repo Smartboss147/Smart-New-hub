@@ -49,8 +49,13 @@ app.use(async (req, res, next) => {
 });
 
 // Initialize Gemini Client
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error("WARNING: GEMINI_API_KEY is not set in the environment.");
+}
+
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: apiKey,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
