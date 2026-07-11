@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp, Sun, Moon, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, MessageSquare, RefreshCw, AlertCircle, CheckCircle, ShieldAlert, Menu, X, ExternalLink, TrendingUp, Sun, Moon, Volume2, VolumeX, Database } from 'lucide-react';
 import Sidebar from './components/Sidebar.tsx';
 import ApprovalDashboard from './components/ApprovalDashboard.tsx';
 import ManualPublisher from './components/ManualPublisher.tsx';
@@ -8,6 +8,7 @@ import CalendarScheduler from './components/CalendarScheduler.tsx';
 import PostHistory from './components/PostHistory.tsx';
 import XSettings from './components/XSettings.tsx';
 import AnalyticsView from './components/AnalyticsView.tsx';
+import FirebaseDiagnosticModal from './components/FirebaseDiagnosticModal.tsx';
 import { Source, Post, BettingTip } from './types.ts';
 import BettingTipsDashboard from './components/BettingTipsDashboard.tsx';
 
@@ -23,6 +24,7 @@ export default function App() {
   const [isGeneratingTips, setIsGeneratingTips] = useState<boolean>(false);
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState<boolean>(false);
 
   // Audio notification settings & sound synthesizer
   const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(() => {
@@ -574,6 +576,17 @@ export default function App() {
                 <span className="hidden lg:inline">AI Processing...</span>
               </span>
             )}
+            
+            {/* Firebase Diagnostic Button */}
+            <button
+              onClick={() => setShowDiagnosticModal(true)}
+              className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:text-indigo-400 text-[10px] font-mono flex items-center gap-1"
+              title="Firebase Diagnostic Tool"
+            >
+              <Database className="w-3 h-3" />
+              <span className="hidden sm:inline">DB Check</span>
+            </button>
+            
             <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 bg-slate-950 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded border border-slate-800">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden sm:inline">Model: gemini-3.5-flash</span>
@@ -608,6 +621,11 @@ export default function App() {
         <div className="flex-1 overflow-hidden flex flex-col">
           {renderActiveView()}
         </div>
+
+        {/* Firebase Diagnostic Modal */}
+        {showDiagnosticModal && (
+          <FirebaseDiagnosticModal onClose={() => setShowDiagnosticModal(false)} />
+        )}
 
         {/* Trend Alert Modal Overlay */}
         {activeTrend && (
