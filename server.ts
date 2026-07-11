@@ -275,6 +275,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+app.post('/api/video-generation', express.json(), async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+  // Placeholder for API integration
+  console.log("Generating video for prompt:", prompt);
+  res.json({ success: true, message: "Video generation request received." });
+});
+
 // Database Connection Status Check
 app.get('/api/db-status', (req, res) => {
   try {

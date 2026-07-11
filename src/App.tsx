@@ -8,6 +8,7 @@ import CalendarScheduler from './components/CalendarScheduler.tsx';
 import PostHistory from './components/PostHistory.tsx';
 import XSettings from './components/XSettings.tsx';
 import AnalyticsView from './components/AnalyticsView.tsx';
+import VideoGenerator from './components/VideoGenerator.tsx';
 import FirebaseDiagnosticModal from './components/FirebaseDiagnosticModal.tsx';
 import { Source, Post, BettingTip } from './types.ts';
 import BettingTipsDashboard from './components/BettingTipsDashboard.tsx';
@@ -436,6 +437,8 @@ export default function App() {
             theme={theme}
           />
         );
+      case 'video_generator':
+        return <VideoGenerator />;
       case 'calendar':
         return (
           <CalendarScheduler
