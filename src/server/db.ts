@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
-import { Source, Post, BettingTip } from '../types.ts';
+import { Source, Post, BettingTip } from '../types.js';
 
 const DB_FILE = process.env.VERCEL 
   ? '/tmp/db.json' 
