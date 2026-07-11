@@ -101,3 +101,25 @@ export function evaluatePostSafety(text: string, existingPosts: string[]): {
 
   return { isDuplicate, rateLimitWarning, riskLevel, riskMessage };
 }
+
+/**
+ * Recursively removes or converts undefined values to null for Firebase compatibility.
+ */
+export function sanitizeForFirebase(obj: any): any {
+  if (obj === undefined) {
+    return null;
+  }
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForFirebase);
+  }
+  const sanitized: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      sanitized[key] = sanitizeForFirebase(value);
+    }
+  }
+  return sanitized;
+}

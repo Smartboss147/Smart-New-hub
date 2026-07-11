@@ -223,7 +223,13 @@ async function handlePublishPipeline(post: any) {
       }
     } catch (err: any) {
       console.error('X publishing failed:', err);
-      logs.push(`X Error: ${err.message || String(err)}`);
+      // Check for CreditsDepleted (402)
+      if (err.code === 402 || (err.data && err.data.title === 'CreditsDepleted')) {
+         logs.push('X Error: Credits Depleted. Skipping X publishing.');
+      } else {
+         logs.push(`X Error: ${err.message || String(err)}`);
+      }
+      xUrl = null;
     }
   }
 

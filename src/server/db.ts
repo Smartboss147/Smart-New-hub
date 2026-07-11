@@ -3,6 +3,7 @@ import path from 'path';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
 import { Source, Post, BettingTip } from '../types.js';
+import { sanitizeForFirebase } from '../utils.js';
 
 const DB_FILE = process.env.VERCEL 
   ? '/tmp/db.json' 
@@ -619,9 +620,10 @@ export async function initDB(): Promise<void> {
 }
 
 async function saveDBToFirebase(state: DBState): Promise<void> {
+  const sanitizedState = sanitizeForFirebase(state);
   if (dbRef) {
     try {
-      await dbRef.set(state);
+      await dbRef.set(sanitizedState);
       console.log('Database successfully saved to Firebase Realtime Database using Admin SDK.');
       return;
     } catch (err: any) {
@@ -640,7 +642,7 @@ async function saveDBToFirebase(state: DBState): Promise<void> {
     const res = await fetch(requestUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state)
+      body: JSON.stringify(sanitizedState)
     });
     if (!res.ok) {
       console.error(`Failed to write to Firebase via REST: ${res.statusText}`);
