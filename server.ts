@@ -22,8 +22,8 @@ import {
   updateBettingTip,
   initDB,
   getDBStatus
-} from './src/server/db.ts';
-import { calculateSimilarity, evaluatePostSafety } from './src/utils.ts';
+} from './src/server/db.js';
+import { calculateSimilarity, evaluatePostSafety } from './src/utils.js';
 
 const app = express();
 const PORT = 3000;
@@ -518,7 +518,11 @@ app.post('/api/betting-tips/generate', async (req, res) => {
       }
     });
 
-    const text = response.text || '[]';
+    if (!response.text) {
+      throw new Error('No content returned from AI');
+    }
+
+    const text = response.text.trim();
     const parsedTips = JSON.parse(text);
 
     // Map tips with fresh IDs, current dates, and default 'pending' status
@@ -589,10 +593,19 @@ app.post('/api/ai/expand', async (req, res) => {
       }
     });
 
+    if (!response.text) {
+      throw new Error('No content returned from AI');
+    }
+
     res.json({ expandedText: response.text.trim() });
   } catch (error: any) {
-    console.error('Expand thought error:', error);
-    res.status(500).json({ error: error.message });
+    if (error?.message?.includes('PERMISSION_DENIED') || error?.code === 403) {
+      console.warn('Gemini AI permission denied, returning fallback:', error.message);
+      res.json({ expandedText: prompt });
+    } else {
+      console.error('Expand thought error:', error);
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
@@ -648,6 +661,10 @@ app.post('/api/posts/:id/regenerate', async (req, res) => {
         }
       }
     });
+
+    if (!response.text) {
+      throw new Error('No content returned from AI');
+    }
 
     const data = JSON.parse(response.text.trim());
 
@@ -793,6 +810,10 @@ app.post('/api/sources/monitor', async (req, res) => {
           }
         });
 
+        if (!response.text) {
+          throw new Error('No content returned from AI');
+        }
+
         const data = JSON.parse(response.text.trim());
         const title = data.title || '';
         const url = data.link || `https://instagram.com/p/${Math.random().toString(36).substring(2, 11)}`;
@@ -891,6 +912,10 @@ app.post('/api/sources/monitor', async (req, res) => {
             }
           }
         });
+
+        if (!response.text) {
+          throw new Error('No content returned from AI');
+        }
 
         const data = JSON.parse(response.text.trim());
         const selectedPostText = data.suggestedPosts[0] || 'No post text generated';
