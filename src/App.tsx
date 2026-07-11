@@ -139,15 +139,40 @@ export default function App() {
         fetch('/api/posts'),
         fetch('/api/betting-tips')
       ]);
+
+      if (!sourcesRes.ok) {
+        const errText = await sourcesRes.text();
+        throw new Error(`Sources API error (${sourcesRes.status}): ${errText.substring(0, 150)}`);
+      }
+      if (!postsRes.ok) {
+        const errText = await postsRes.text();
+        throw new Error(`Posts API error (${postsRes.status}): ${errText.substring(0, 150)}`);
+      }
+      if (!tipsRes.ok) {
+        const errText = await tipsRes.text();
+        throw new Error(`Betting tips API error (${tipsRes.status}): ${errText.substring(0, 150)}`);
+      }
+
       const sourcesData = await sourcesRes.json();
       const postsData = await postsRes.json();
       const tipsData = await tipsRes.json();
-      setSources(sourcesData);
-      setPosts(postsData);
-      setBettingTips(tipsData);
-    } catch (err) {
+
+      if (sourcesData && sourcesData.error) {
+        throw new Error(sourcesData.error);
+      }
+      if (postsData && postsData.error) {
+        throw new Error(postsData.error);
+      }
+      if (tipsData && tipsData.error) {
+        throw new Error(tipsData.error);
+      }
+
+      setSources(Array.isArray(sourcesData) ? sourcesData : []);
+      setPosts(Array.isArray(postsData) ? postsData : []);
+      setBettingTips(Array.isArray(tipsData) ? tipsData : []);
+    } catch (err: any) {
       console.error('Error loading initial data:', err);
-      showNotification('error', 'Could not sync data with server. Check database JSON connection.');
+      showNotification('error', `Could not sync data with server. ${err.message || err}`);
     }
   };
 

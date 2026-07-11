@@ -493,9 +493,10 @@ function parseServiceAccount(val: string): any {
     throw new Error("Value is a raw RSA Private Key PEM string, not a JSON service account object. You must paste the ENTIRE JSON content of your downloaded service account key file (containing 'private_key', 'client_email', 'project_id', etc.) into FIREBASE_SERVICE_ACCOUNT.");
   }
 
+  let parsed: any = null;
   // Try parsing directly first
   try {
-    return JSON.parse(trimmed);
+    parsed = JSON.parse(trimmed);
   } catch (e) {
     // If that fails, try to extract JSON from the string
     const firstBrace = trimmed.indexOf('{');
@@ -503,13 +504,20 @@ function parseServiceAccount(val: string): any {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       const candidate = trimmed.substring(firstBrace, lastBrace + 1);
       try {
-        return JSON.parse(candidate);
+        parsed = JSON.parse(candidate);
       } catch (innerError) {
         // Fall through
       }
     }
-    throw e; // throw original error if both failed
+    if (!parsed) throw e; // throw original error if both failed
   }
+
+  // Ensure private key is properly formatted with actual newlines
+  if (parsed && typeof parsed === 'object' && parsed.private_key) {
+    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+  }
+
+  return parsed;
 }
 
 export async function initDB(): Promise<void> {
